@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/AppShell";
+import { accentBar, accentBg15, accentBorderColumn, dotBg } from "@/components/accent-classes";
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
@@ -121,7 +122,7 @@ export function DashboardPage() {
 function Kpi({ label, value, accent, mono }: { label: string; value: string; accent: string; mono?: boolean }) {
   return (
     <div className="bg-white border border-ink/5 rounded-xl p-4 flex flex-col gap-2 relative overflow-hidden">
-      <div className={`absolute top-0 left-0 h-0.5 w-12 bg-${accent}`} />
+      <div className={`absolute top-0 left-0 h-0.5 w-12 ${accentBar[accent]}`} />
       <span className="text-[10px] font-mono uppercase tracking-widest text-ink/40">{label}</span>
       <span className={`text-2xl font-bold tracking-tight ${mono ? "font-mono" : "font-display"}`}>{value}</span>
     </div>
@@ -141,9 +142,9 @@ function Column({
 }) {
   return (
     <section className="flex flex-col gap-4">
-      <div className={`flex items-center justify-between border-b-2 border-${accent} pb-2`}>
+      <div className={`flex items-center justify-between border-b-2 ${accentBorderColumn[accent]} pb-2`}>
         <h2 className="font-display font-bold text-sm uppercase tracking-widest">{title}</h2>
-        <span className={`text-[10px] font-mono bg-${accent}/15 px-2 py-0.5 rounded text-ink/70`}>
+        <span className={`text-[10px] font-mono ${accentBg15[accent]} px-2 py-0.5 rounded text-ink/70`}>
           {String(count).padStart(2, "0")} pedidos
         </span>
       </div>
@@ -218,7 +219,7 @@ function QuoteRow({ name, amount, dot }: { name: string; amount: string; dot: st
         <p className="text-xs font-bold">{name}</p>
         <p className="text-[10px] text-ink/40">Estimado: {amount}</p>
       </div>
-      <div className={`size-2 rounded-full bg-${dot}`} />
+      <div className={`size-2 rounded-full ${dotBg[dot]}`} />
     </div>
   );
 }

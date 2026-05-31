@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/AppShell";
+import { accentBar, accentBg15 } from "@/components/accent-classes";
 
 export const Route = createFileRoute("/inventario")({
   head: () => ({
@@ -100,7 +101,7 @@ export function InventarioPage() {
                   <td className="px-4 py-3 font-mono text-xs text-ink/60">{it.sku}</td>
                   <td className="px-4 py-3 font-medium">{it.name}</td>
                   <td className="px-4 py-3">
-                    <span className={`text-[10px] px-2 py-0.5 rounded uppercase font-bold tracking-tighter bg-${categoryAccent[it.category]}/15 text-ink/70`}>
+                    <span className={`text-[10px] px-2 py-0.5 rounded uppercase font-bold tracking-tighter ${accentBg15[categoryAccent[it.category]]} text-ink/70`}>
                       {it.category}
                     </span>
                   </td>
@@ -133,7 +134,7 @@ export function InventarioPage() {
 function SummaryCard({ label, value, accent }: { label: string; value: string; accent: string }) {
   return (
     <div className="bg-white border border-ink/5 rounded-xl p-4 flex flex-col gap-2 relative overflow-hidden">
-      <div className={`absolute top-0 left-0 h-0.5 w-12 bg-${accent}`} />
+      <div className={`absolute top-0 left-0 h-0.5 w-12 ${accentBar[accent]}`} />
       <span className="text-[10px] font-mono uppercase tracking-widest text-ink/40">{label}</span>
       <span className="font-display text-2xl font-bold tracking-tight">{value}</span>
     </div>

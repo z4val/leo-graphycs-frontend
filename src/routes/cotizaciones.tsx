@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/AppShell";
+import { accentBar } from "@/components/accent-classes";
 
 export const Route = createFileRoute("/cotizaciones")({
   head: () => ({
@@ -152,7 +153,7 @@ export function CotizacionesPage() {
 function Stat({ label, value, accent }: { label: string; value: string; accent: string }) {
   return (
     <div className="bg-white border border-ink/5 rounded-xl p-4 flex flex-col gap-2 relative overflow-hidden">
-      <div className={`absolute top-0 left-0 h-0.5 w-12 bg-${accent}`} />
+      <div className={`absolute top-0 left-0 h-0.5 w-12 ${accentBar[accent]}`} />
       <span className="text-[10px] font-mono uppercase tracking-widest text-ink/40">{label}</span>
       <span className="font-display text-2xl font-bold tracking-tight">{value}</span>
     </div>

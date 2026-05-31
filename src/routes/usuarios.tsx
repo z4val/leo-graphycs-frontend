@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/AppShell";
+import { accentBar, accentBg20, accentRing30 } from "@/components/accent-classes";
 
 export const Route = createFileRoute("/usuarios")({
   head: () => ({
@@ -64,9 +65,9 @@ export function UsuariosPage() {
               key={u.id}
               className="bg-white border border-ink/5 rounded-xl p-5 hover:border-ink/20 transition-colors group relative overflow-hidden"
             >
-              <div className={`absolute top-0 left-0 h-0.5 w-16 bg-${roleAccent[u.role]}`} />
+              <div className={`absolute top-0 left-0 h-0.5 w-16 ${accentBar[roleAccent[u.role]]}`} />
               <div className="flex items-start gap-4">
-                <div className={`size-12 rounded-full bg-${roleAccent[u.role]}/20 ring-1 ring-${roleAccent[u.role]}/30 grid place-items-center shrink-0`}>
+                <div className={`size-12 rounded-full ${accentBg20[roleAccent[u.role]]} ring-1 ${accentRing30[roleAccent[u.role]]} grid place-items-center shrink-0`}>
                   <span className="font-display font-bold text-sm">{u.initials}</span>
                 </div>
                 <div className="flex-1 min-w-0">
@@ -96,7 +97,7 @@ export function UsuariosPage() {
           <div className="space-y-4">
             {(["Administrador", "Operador", "Diseñador", "Vendedor"] as Role[]).map((role) => (
               <div key={role} className="flex items-start gap-3">
-                <div className={`mt-1 size-3 rounded-sm bg-${roleAccent[role]}`} />
+                <div className={`mt-1 size-3 rounded-sm ${accentBar[roleAccent[role]]}`} />
                 <div className="flex-1">
                   <p className="text-sm font-bold">{role}</p>
                   <p className="text-xs text-ink/50">
@@ -122,7 +123,7 @@ export function UsuariosPage() {
 function Stat({ label, value, accent }: { label: string; value: string; accent: string }) {
   return (
     <div className="bg-white border border-ink/5 rounded-xl p-4 flex flex-col gap-2 relative overflow-hidden">
-      <div className={`absolute top-0 left-0 h-0.5 w-12 bg-${accent}`} />
+      <div className={`absolute top-0 left-0 h-0.5 w-12 ${accentBar[accent]}`} />
       <span className="text-[10px] font-mono uppercase tracking-widest text-ink/40">{label}</span>
       <span className="font-display text-2xl font-bold tracking-tight">{value}</span>
     </div>
