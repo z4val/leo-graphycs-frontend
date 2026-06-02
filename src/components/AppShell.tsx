@@ -1,5 +1,7 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import type { ReactNode } from "react";
+import { authService } from "@/lib/api/auth.service";
+import { useState } from "react";
 
 const navItems = [
   { to: "/dashboard", label: "Tablero", code: "01" },
@@ -16,6 +18,20 @@ interface AppShellProps {
 
 export function AppShell({ title, action, children }: AppShellProps) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const navigate = useNavigate();
+  const user = authService.getCurrentUser();
+  const [showUserMenu, setShowUserMenu] = useState(false);
+
+  const handleLogout = () => {
+    authService.logout();
+    navigate({ to: "/login" });
+  };
+
+  const initials = user?.nombreCompleto
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase() || "U";
 
   return (
     <div className="min-h-screen flex bg-paper text-ink">
@@ -58,12 +74,17 @@ export function AppShell({ title, action, children }: AppShellProps) {
               <span className="text-xs font-medium">Prensas en línea</span>
             </div>
           </div>
-          <Link
-            to="/login"
-            className="block text-[10px] font-mono uppercase tracking-widest text-ink/40 hover:text-ink transition-colors px-2"
+          <div className="p-3 rounded-lg bg-white border border-ink/5 text-sm">
+            <p className="text-[10px] text-ink/40 mb-1">Usuario actual</p>
+            <p className="font-semibold text-sm">{user?.nombreCompleto}</p>
+            <p className="text-[10px] text-ink/40">{user?.rol}</p>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="w-full text-[10px] font-mono uppercase tracking-widest text-ink/40 hover:text-ink transition-colors px-2 py-2 rounded hover:bg-ink/5"
           >
             ← Cerrar sesión
-          </Link>
+          </button>
         </div>
       </aside>
 
@@ -72,8 +93,25 @@ export function AppShell({ title, action, children }: AppShellProps) {
           <h1 className="font-display font-bold text-xl uppercase tracking-tight">{title}</h1>
           <div className="flex items-center gap-4">
             {action}
-            <div className="size-8 rounded-full bg-cyan-press/20 ring-1 ring-cyan-press/30 grid place-items-center">
-              <span className="text-[10px] font-bold text-ink">JD</span>
+            <div 
+              onClick={() => setShowUserMenu(!showUserMenu)}
+              className="size-8 rounded-full bg-cyan-press/20 ring-1 ring-cyan-press/30 grid place-items-center cursor-pointer hover:ring-cyan-press transition-all relative"
+            >
+              <span className="text-[10px] font-bold text-ink">{initials}</span>
+              {showUserMenu && (
+                <div className="absolute top-full right-0 mt-2 w-48 bg-white border border-ink/10 rounded-lg shadow-lg z-50">
+                  <div className="p-3 border-b border-ink/5">
+                    <p className="text-sm font-semibold">{user?.nombreCompleto}</p>
+                    <p className="text-[10px] text-ink/50">{user?.correo}</p>
+                  </div>
+                  <button
+                    onClick={handleLogout}
+                    className="w-full text-left px-3 py-2 text-sm text-destructive hover:bg-destructive/5"
+                  >
+                    Cerrar sesión
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </header>

@@ -1,8 +1,14 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { AppShell } from "@/components/AppShell";
 import { accentBar } from "@/components/accent-classes";
+import { authService } from "@/lib/api/auth.service";
 
 export const Route = createFileRoute("/cotizaciones")({
+  beforeLoad: () => {
+    if (!authService.isAuthenticated()) {
+      throw redirect({ to: "/login" });
+    }
+  },
   head: () => ({
     meta: [
       { title: "Cotizaciones — PREX ERP" },

@@ -1,39 +1,38 @@
-import { createFileRoute, Link, useNavigate, redirect } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
 import { authService } from "@/lib/api/auth.service";
 
-export const Route = createFileRoute("/login")({
-  beforeLoad: () => {
-    if (authService.isAuthenticated()) {
-      throw redirect({ to: "/dashboard" });
-    }
-  },
+export const Route = createFileRoute("/reset-password")({
   head: () => ({
     meta: [
-      { title: "Iniciar sesión — PREX ERP" },
-      { name: "description", content: "Accede a tu panel de control de imprenta." },
+      { title: "Resetear contraseña — PREX ERP" },
+      { name: "description", content: "Recupera acceso a tu cuenta." },
     ],
   }),
-  component: LoginPage,
+  component: ResetPasswordPage,
 });
 
-function LoginPage() {
+function ResetPasswordPage() {
   const navigate = useNavigate();
-  const [correo, setCorreo] = useState("juan@prex.mx");
-  const [password, setPassword] = useState("");
+  const [correo, setCorreo] = useState("");
+  const [contrasenaAnterior, setContrasenaAnterior] = useState("");
+  const [contrasenanueva, setContrasenanueva] = useState("");
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError("");
+    setSuccess("");
     setLoading(true);
 
     try {
-      await authService.login(correo, password);
-      navigate({ to: "/dashboard" });
+      await authService.resetPassword(correo, contrasenaAnterior, contrasenanueva);
+      setSuccess("Contraseña actualizada correctamente. Redirigiendo...");
+      setTimeout(() => navigate({ to: "/login" }), 2000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al iniciar sesión");
+      setError(err instanceof Error ? err.message : "Error al resetear contraseña");
     } finally {
       setLoading(false);
     }
@@ -61,11 +60,10 @@ function LoginPage() {
             <span className="size-2.5 rounded-full bg-paper" />
           </div>
           <h2 className="font-display text-5xl font-bold leading-[1.05] tracking-tight text-balance">
-            Cada pliego, bajo control.
+            Recupera tu acceso.
           </h2>
           <p className="text-paper/60 text-sm leading-relaxed max-w-sm">
-            Gestiona producción, inventario y cotizaciones desde un solo lugar.
-            Diseñado para imprentas que respetan la precisión.
+            Ingresa tu correo y contraseña anterior para crear una nueva contraseña.
           </p>
         </div>
 
@@ -80,34 +78,34 @@ function LoginPage() {
         <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-8">
           <div className="space-y-2">
             <p className="text-[10px] font-mono uppercase tracking-widest text-ink/40">
-              Acceso al panel
+              Recuperación de cuenta
             </p>
             <h1 className="font-display text-3xl font-bold tracking-tight">
-              Iniciar sesión
+              Resetear contraseña
             </h1>
             <p className="text-sm text-ink/60">
-              Ingresa tus credenciales para continuar.
+              Ingresa tus datos para crear una nueva contraseña.
             </p>
           </div>
 
           <div className="space-y-4">
             <Field
-              label="Correo"
+              label="Correo electrónico"
               type="email"
               value={correo}
               onChange={setCorreo}
-              placeholder="tu@correo.com"
             />
             <Field
-              label="Contraseña"
+              label="Contraseña anterior"
               type="password"
-              value={password}
-              onChange={setPassword}
-              hint={
-                <Link to="/reset-password" className="text-ink/40 hover:text-ink underline-offset-4 hover:underline">
-                  ¿Olvidaste?
-                </Link>
-              }
+              value={contrasenaAnterior}
+              onChange={setContrasenaAnterior}
+            />
+            <Field
+              label="Nueva contraseña"
+              type="password"
+              value={contrasenanueva}
+              onChange={setContrasenanueva}
             />
           </div>
 
@@ -117,20 +115,25 @@ function LoginPage() {
             </div>
           )}
 
+          {success && (
+            <div className="bg-emerald-press/10 border border-emerald-press/20 p-3 rounded text-sm text-emerald-press">
+              {success}
+            </div>
+          )}
+
           <button
             type="submit"
             disabled={loading}
             className="w-full bg-ink text-paper font-medium text-sm py-3 rounded-md hover:bg-ink/90 transition-colors uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? "Iniciando..." : "Entrar al taller"}
+            {loading ? "Procesando..." : "Actualizar contraseña"}
           </button>
 
-          <p className="text-xs text-ink/50 text-center">
-            ¿Sin cuenta?{" "}
-            <Link to="/dashboard" className="text-ink font-semibold underline-offset-4 hover:underline">
-              Solicitar acceso
+          <div className="text-center text-sm">
+            <Link to="/login" className="text-ink/60 hover:text-ink underline-offset-4 hover:underline">
+              Volver a iniciar sesión
             </Link>
-          </p>
+          </div>
         </form>
       </div>
     </div>
@@ -142,26 +145,20 @@ function Field({
   type,
   value,
   onChange,
-  hint,
-  placeholder,
 }: {
   label: string;
   type: string;
   value: string;
   onChange: (v: string) => void;
-  hint?: React.ReactNode;
-  placeholder?: string;
 }) {
   return (
     <label className="block space-y-1.5">
-      <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-widest text-ink/40">
-        <span>{label}</span>
-        {hint}
-      </div>
+      <span className="text-[10px] font-mono uppercase tracking-widest text-ink/40">
+        {label}
+      </span>
       <input
         type={type}
         value={value}
-        placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
         className="w-full px-3 py-2.5 bg-white border border-ink/10 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-cyan-press/40 focus:border-cyan-press transition"
       />
