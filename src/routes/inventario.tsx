@@ -46,6 +46,42 @@ export const Route = createFileRoute("/inventario")({
 
 type Tab = "insumos" | "proveedores" | "compras" | "kardex";
 
+type InsumoFormErrors = Partial<
+  Record<
+    | "nombre"
+    | "tipoInsumo"
+    | "unidadMedida"
+    | "gramaje"
+    | "medida"
+    | "tipoPapel"
+    | "color"
+    | "precioVentaMillar"
+    | "stockMinimo",
+    string
+  >
+>;
+
+type ProveedorFormErrors = Partial<
+  Record<
+    | "ruc"
+    | "razonSocial"
+    | "nombreRepresentante"
+    | "direccion"
+    | "telefonoFijo"
+    | "telefonoCelular"
+    | "correo",
+    string
+  >
+>;
+
+type SalidaFormErrors = Partial<
+  Record<"idInsumo" | "cantidad" | "idOrdenTrabajo" | "observaciones", string>
+>;
+
+type CompraFormErrors = Partial<
+  Record<"codigo" | "idProveedor" | "detalles" | "observaciones", string>
+>;
+
 const tipoLabels: Record<TipoInsumo, string> = {
   PAPEL: "Papel",
   TINTA: "Tinta",
@@ -56,6 +92,18 @@ const unidadLabels: Record<UnidadMedidaInsumo, string> = {
   MILLAR: "millares",
   KILO: "kg",
   LITRO: "L",
+};
+
+const unidadDisplayLabels: Record<UnidadMedidaInsumo, string> = {
+  MILLAR: "Millar",
+  KILO: "Kilo",
+  LITRO: "Litro",
+};
+
+const defaultUnidadByTipo: Record<TipoInsumo, UnidadMedidaInsumo> = {
+  PAPEL: "MILLAR",
+  TINTA: "KILO",
+  SOLUCION_FUENTE: "LITRO",
 };
 
 const tipoAccent: Record<TipoInsumo, string> = {
@@ -109,19 +157,23 @@ export function InventarioPage() {
   const [showCompraForm, setShowCompraForm] = useState(false);
   const [showSalidaForm, setShowSalidaForm] = useState(false);
   const [insumoForm, setInsumoForm] = useState<CreateInsumoRequest>(emptyInsumo);
+  const [insumoErrors, setInsumoErrors] = useState<InsumoFormErrors>({});
   const [proveedorForm, setProveedorForm] = useState<CreateProveedorRequest>(emptyProveedor);
+  const [proveedorErrors, setProveedorErrors] = useState<ProveedorFormErrors>({});
   const [salidaForm, setSalidaForm] = useState<RegistrarSalidaRequest>({
     idInsumo: 0,
     cantidad: 0,
     idOrdenTrabajo: undefined,
     observaciones: "",
   });
+  const [salidaErrors, setSalidaErrors] = useState<SalidaFormErrors>({});
   const [compraForm, setCompraForm] = useState<CreateOrdenCompraRequest>({
     codigo: "",
     idProveedor: 0,
     observaciones: "",
     detalles: [{ idInsumo: 0, cantidad: 1, precioUnitario: 0 }],
   });
+  const [compraErrors, setCompraErrors] = useState<CompraFormErrors>({});
 
   useEffect(() => {
     void loadInventory();
@@ -186,40 +238,74 @@ export function InventarioPage() {
 
   const createInsumo = async (event: React.FormEvent) => {
     event.preventDefault();
+    const cleaned = cleanInsumo(insumoForm);
+    const validationErrors = validateInsumoForm(cleaned, insumos);
+    setInsumoErrors(validationErrors);
+
+    if (Object.keys(validationErrors).length > 0) {
+      setError("Corrige los campos marcados antes de guardar el insumo.");
+      return;
+    }
+
     await save(async () => {
-      await inventoryService.createInsumo(cleanInsumo(insumoForm));
+      await inventoryService.createInsumo(cleaned);
       setInsumoForm(emptyInsumo);
+      setInsumoErrors({});
       setShowInsumoForm(false);
     });
   };
 
   const createProveedor = async (event: React.FormEvent) => {
     event.preventDefault();
+    const cleaned = cleanProveedor(proveedorForm);
+    const validationErrors = validateProveedorForm(cleaned, proveedores);
+    setProveedorErrors(validationErrors);
+
+    if (Object.keys(validationErrors).length > 0) {
+      setError("Corrige los campos marcados antes de guardar el proveedor.");
+      return;
+    }
+
     await save(async () => {
-      await inventoryService.createProveedor(proveedorForm);
+      await inventoryService.createProveedor(cleaned);
       setProveedorForm(emptyProveedor);
+      setProveedorErrors({});
       setShowProveedorForm(false);
     });
   };
 
   const createCompra = async (event: React.FormEvent) => {
     event.preventDefault();
+    const cleaned = cleanCompra(compraForm);
+    const validationErrors = validateCompraForm(cleaned, insumos, proveedores);
+    setCompraErrors(validationErrors);
+
+    if (Object.keys(validationErrors).length > 0) {
+      setError("Corrige los campos marcados antes de crear la orden de compra.");
+      return;
+    }
+
     await save(async () => {
-      await inventoryService.createOrdenCompra({
-        ...compraForm,
-        detalles: compraForm.detalles.filter((detalle) => detalle.idInsumo && detalle.cantidad > 0),
-      });
+      await inventoryService.createOrdenCompra(cleaned);
+      setCompraErrors({});
       setShowCompraForm(false);
     });
   };
 
   const registrarSalida = async (event: React.FormEvent) => {
     event.preventDefault();
+    const cleaned = cleanSalida(salidaForm);
+    const validationErrors = validateSalidaForm(cleaned, insumos);
+    setSalidaErrors(validationErrors);
+
+    if (Object.keys(validationErrors).length > 0) {
+      setError("Corrige los campos marcados antes de registrar la salida.");
+      return;
+    }
+
     await save(async () => {
-      await inventoryService.registrarSalida({
-        ...salidaForm,
-        idOrdenTrabajo: salidaForm.idOrdenTrabajo || null,
-      });
+      await inventoryService.registrarSalida(cleaned);
+      setSalidaErrors({});
       setShowSalidaForm(false);
     });
   };
@@ -242,6 +328,9 @@ export function InventarioPage() {
       setSaving(false);
     }
   };
+
+  const isPapelForm = insumoForm.tipoInsumo === "PAPEL";
+  const isTintaForm = insumoForm.tipoInsumo === "TINTA";
 
   return (
     <AppShell
@@ -372,94 +461,142 @@ export function InventarioPage() {
       {showInsumoForm && (
         <Modal title="Nuevo insumo" onClose={() => setShowInsumoForm(false)}>
           <form onSubmit={createInsumo} className="space-y-3">
-            <Field label="Nombre">
+            <Field label="Nombre" error={insumoErrors.nombre}>
               <input
                 required
                 value={insumoForm.nombre}
-                onChange={(e) => setInsumoForm({ ...insumoForm, nombre: e.target.value })}
-                className={inputClass}
+                onChange={(e) => {
+                  setInsumoForm({ ...insumoForm, nombre: sanitizeBusinessText(e.target.value) });
+                  clearInsumoError("nombre", setInsumoErrors);
+                }}
+                className={fieldClass(insumoErrors.nombre)}
               />
             </Field>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Tipo">
+              <Field label="Tipo" error={insumoErrors.tipoInsumo}>
                 <select
                   value={insumoForm.tipoInsumo}
-                  onChange={(e) =>
-                    setInsumoForm({ ...insumoForm, tipoInsumo: e.target.value as TipoInsumo })
-                  }
-                  className={inputClass}
+                  onChange={(e) => {
+                    const tipoInsumo = e.target.value as TipoInsumo;
+                    setInsumoForm({
+                      ...insumoForm,
+                      tipoInsumo,
+                      unidadMedida: defaultUnidadByTipo[tipoInsumo],
+                      gramaje: tipoInsumo === "PAPEL" ? insumoForm.gramaje : undefined,
+                      medida: tipoInsumo === "PAPEL" ? insumoForm.medida : "",
+                      tipoPapel: tipoInsumo === "PAPEL" ? insumoForm.tipoPapel : "",
+                      color: tipoInsumo === "TINTA" ? insumoForm.color : "",
+                      precioVentaMillar:
+                        tipoInsumo === "PAPEL" ? insumoForm.precioVentaMillar : undefined,
+                    });
+                    setInsumoErrors({});
+                    setError("");
+                  }}
+                  className={fieldClass(insumoErrors.tipoInsumo)}
                 >
                   <option value="PAPEL">Papel</option>
                   <option value="TINTA">Tinta</option>
                   <option value="SOLUCION_FUENTE">Solución de fuente</option>
                 </select>
               </Field>
-              <Field label="Unidad">
-                <select
-                  value={insumoForm.unidadMedida}
-                  onChange={(e) =>
-                    setInsumoForm({
-                      ...insumoForm,
-                      unidadMedida: e.target.value as UnidadMedidaInsumo,
-                    })
-                  }
-                  className={inputClass}
-                >
-                  <option value="MILLAR">Millar</option>
-                  <option value="KILO">Kilo</option>
-                  <option value="LITRO">Litro</option>
-                </select>
+              <Field label="Unidad" error={insumoErrors.unidadMedida}>
+                <input
+                  readOnly
+                  tabIndex={-1}
+                  value={unidadDisplayLabels[insumoForm.unidadMedida]}
+                  className={`${fieldClass(insumoErrors.unidadMedida)} cursor-not-allowed bg-ink/[0.03] text-ink/60`}
+                />
               </Field>
             </div>
-            <div className="grid grid-cols-3 gap-3">
-              <Field label="Gramaje">
+            {isPapelForm && (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Gramaje" error={insumoErrors.gramaje}>
+                    <input
+                      required
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={insumoForm.gramaje ?? ""}
+                      onKeyDown={(e) => preventInvalidNumberKey(e, { decimal: false })}
+                      onChange={(e) => {
+                        setInsumoForm({
+                          ...insumoForm,
+                          gramaje: optionalNumber(onlyDigits(e.target.value)),
+                        });
+                        clearInsumoError("gramaje", setInsumoErrors);
+                      }}
+                      className={fieldClass(insumoErrors.gramaje)}
+                    />
+                  </Field>
+                  <Field label="Medida" error={insumoErrors.medida}>
+                    <input
+                      required
+                      value={insumoForm.medida ?? ""}
+                      placeholder="70x100, A4, Carta"
+                      onChange={(e) => {
+                        setInsumoForm({
+                          ...insumoForm,
+                          medida: sanitizeBusinessText(e.target.value),
+                        });
+                        clearInsumoError("medida", setInsumoErrors);
+                      }}
+                      className={fieldClass(insumoErrors.medida)}
+                    />
+                  </Field>
+                </div>
+                <Field label="Tipo de papel" error={insumoErrors.tipoPapel}>
+                  <input
+                    required
+                    value={insumoForm.tipoPapel ?? ""}
+                    placeholder="Bond, couche, opalina"
+                    onChange={(e) => {
+                      setInsumoForm({
+                        ...insumoForm,
+                        tipoPapel: sanitizePersonName(e.target.value),
+                      });
+                      clearInsumoError("tipoPapel", setInsumoErrors);
+                    }}
+                    className={fieldClass(insumoErrors.tipoPapel)}
+                  />
+                </Field>
+              </>
+            )}
+            {isTintaForm && (
+              <Field label="Color" error={insumoErrors.color}>
                 <input
-                  type="number"
-                  value={insumoForm.gramaje ?? ""}
-                  onChange={(e) =>
-                    setInsumoForm({ ...insumoForm, gramaje: optionalNumber(e.target.value) })
-                  }
-                  className={inputClass}
-                />
-              </Field>
-              <Field label="Medida">
-                <input
-                  value={insumoForm.medida ?? ""}
-                  onChange={(e) => setInsumoForm({ ...insumoForm, medida: e.target.value })}
-                  className={inputClass}
-                />
-              </Field>
-              <Field label="Color">
-                <input
+                  required
                   value={insumoForm.color ?? ""}
-                  onChange={(e) => setInsumoForm({ ...insumoForm, color: e.target.value })}
-                  className={inputClass}
+                  placeholder="Cyan, magenta, amarillo, negro"
+                  onChange={(e) => {
+                    setInsumoForm({ ...insumoForm, color: sanitizePersonName(e.target.value) });
+                    clearInsumoError("color", setInsumoErrors);
+                  }}
+                  className={fieldClass(insumoErrors.color)}
                 />
               </Field>
-            </div>
-            <Field label="Tipo de papel">
-              <input
-                value={insumoForm.tipoPapel ?? ""}
-                onChange={(e) => setInsumoForm({ ...insumoForm, tipoPapel: e.target.value })}
-                className={inputClass}
-              />
-            </Field>
+            )}
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Precio venta por millar">
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={insumoForm.precioVentaMillar ?? ""}
-                  onChange={(e) =>
-                    setInsumoForm({
-                      ...insumoForm,
-                      precioVentaMillar: optionalNumber(e.target.value),
-                    })
-                  }
-                  className={inputClass}
-                />
-              </Field>
+              {isPapelForm && (
+                <Field label="Precio venta por millar" error={insumoErrors.precioVentaMillar}>
+                  <input
+                    required
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value={insumoForm.precioVentaMillar ?? ""}
+                    onKeyDown={(e) => preventInvalidNumberKey(e)}
+                    onChange={(e) => {
+                      setInsumoForm({
+                        ...insumoForm,
+                        precioVentaMillar: optionalNumber(sanitizeDecimalInput(e.target.value)),
+                      });
+                      clearInsumoError("precioVentaMillar", setInsumoErrors);
+                    }}
+                    className={fieldClass(insumoErrors.precioVentaMillar)}
+                  />
+                </Field>
+              )}
               <Field label="Stock mínimo">
                 <input
                   required
@@ -467,11 +604,21 @@ export function InventarioPage() {
                   min="0"
                   step="0.001"
                   value={insumoForm.stockMinimo}
-                  onChange={(e) =>
-                    setInsumoForm({ ...insumoForm, stockMinimo: Number(e.target.value) })
-                  }
-                  className={inputClass}
+                  onKeyDown={(e) => preventInvalidNumberKey(e)}
+                  onChange={(e) => {
+                    setInsumoForm({
+                      ...insumoForm,
+                      stockMinimo: Number(sanitizeDecimalInput(e.target.value)),
+                    });
+                    clearInsumoError("stockMinimo", setInsumoErrors);
+                  }}
+                  className={fieldClass(insumoErrors.stockMinimo)}
                 />
+                {insumoErrors.stockMinimo && (
+                  <p className="mt-1 text-xs font-medium text-destructive">
+                    {insumoErrors.stockMinimo}
+                  </p>
+                )}
               </Field>
             </div>
             <FormActions saving={saving} onCancel={() => setShowInsumoForm(false)} />
@@ -482,59 +629,101 @@ export function InventarioPage() {
       {showProveedorForm && (
         <Modal title="Nuevo proveedor" onClose={() => setShowProveedorForm(false)}>
           <form onSubmit={createProveedor} className="space-y-3">
-            <Field label="RUC">
+            <Field label="RUC" error={proveedorErrors.ruc}>
               <input
                 required
+                inputMode="numeric"
                 maxLength={11}
                 value={proveedorForm.ruc}
-                onChange={(e) => setProveedorForm({ ...proveedorForm, ruc: e.target.value })}
-                className={inputClass}
+                onKeyDown={(e) => preventInvalidNumberKey(e, { decimal: false })}
+                onChange={(e) => {
+                  setProveedorForm({
+                    ...proveedorForm,
+                    ruc: onlyDigits(e.target.value).slice(0, 11),
+                  });
+                  clearProveedorError("ruc", setProveedorErrors);
+                }}
+                className={fieldClass(proveedorErrors.ruc)}
               />
             </Field>
             <Field label="Razón social">
               <input
                 required
                 value={proveedorForm.razonSocial}
-                onChange={(e) =>
-                  setProveedorForm({ ...proveedorForm, razonSocial: e.target.value })
-                }
-                className={inputClass}
+                onChange={(e) => {
+                  setProveedorForm({
+                    ...proveedorForm,
+                    razonSocial: sanitizeBusinessText(e.target.value),
+                  });
+                  clearProveedorError("razonSocial", setProveedorErrors);
+                }}
+                className={fieldClass(proveedorErrors.razonSocial)}
               />
+              {proveedorErrors.razonSocial && (
+                <p className="mt-1 text-xs font-medium text-destructive">
+                  {proveedorErrors.razonSocial}
+                </p>
+              )}
             </Field>
-            <Field label="Representante">
+            <Field label="Representante" error={proveedorErrors.nombreRepresentante}>
               <input
                 value={proveedorForm.nombreRepresentante}
-                onChange={(e) =>
-                  setProveedorForm({ ...proveedorForm, nombreRepresentante: e.target.value })
-                }
-                className={inputClass}
+                onChange={(e) => {
+                  setProveedorForm({
+                    ...proveedorForm,
+                    nombreRepresentante: sanitizePersonName(e.target.value),
+                  });
+                  clearProveedorError("nombreRepresentante", setProveedorErrors);
+                }}
+                className={fieldClass(proveedorErrors.nombreRepresentante)}
               />
             </Field>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Celular">
+              <Field label="Celular" error={proveedorErrors.telefonoCelular}>
                 <input
+                  inputMode="numeric"
+                  maxLength={9}
                   value={proveedorForm.telefonoCelular}
-                  onChange={(e) =>
-                    setProveedorForm({ ...proveedorForm, telefonoCelular: e.target.value })
-                  }
-                  className={inputClass}
+                  onKeyDown={(e) => preventInvalidNumberKey(e, { decimal: false })}
+                  onChange={(e) => {
+                    setProveedorForm({
+                      ...proveedorForm,
+                      telefonoCelular: onlyDigits(e.target.value).slice(0, 9),
+                    });
+                    clearProveedorError("telefonoCelular", setProveedorErrors);
+                  }}
+                  className={fieldClass(proveedorErrors.telefonoCelular)}
                 />
               </Field>
-              <Field label="Correo">
+              <Field label="Correo" error={proveedorErrors.correo}>
                 <input
                   type="email"
                   value={proveedorForm.correo}
-                  onChange={(e) => setProveedorForm({ ...proveedorForm, correo: e.target.value })}
-                  className={inputClass}
+                  onChange={(e) => {
+                    setProveedorForm({ ...proveedorForm, correo: sanitizeEmail(e.target.value) });
+                    clearProveedorError("correo", setProveedorErrors);
+                  }}
+                  className={fieldClass(proveedorErrors.correo)}
                 />
               </Field>
             </div>
             <Field label="Dirección">
               <input
                 value={proveedorForm.direccion}
-                onChange={(e) => setProveedorForm({ ...proveedorForm, direccion: e.target.value })}
-                className={inputClass}
+                onChange={(e) => {
+                  setProveedorForm({
+                    ...proveedorForm,
+                    direccion: sanitizeAddress(e.target.value),
+                  });
+                  clearProveedorError("direccion", setProveedorErrors);
+                }}
+                className={fieldClass(proveedorErrors.direccion)}
               />
+              {proveedorErrors.direccion && (
+                <p className="mt-1 text-xs font-medium text-destructive">
+                  {proveedorErrors.direccion}
+                </p>
+              )}
             </Field>
             <FormActions saving={saving} onCancel={() => setShowProveedorForm(false)} />
           </form>
@@ -544,11 +733,14 @@ export function InventarioPage() {
       {showSalidaForm && (
         <Modal title="Registrar salida FIFO" onClose={() => setShowSalidaForm(false)}>
           <form onSubmit={registrarSalida} className="space-y-3">
-            <Field label="Insumo">
+            <Field label="Insumo" error={salidaErrors.idInsumo}>
               <select
                 value={salidaForm.idInsumo}
-                onChange={(e) => setSalidaForm({ ...salidaForm, idInsumo: Number(e.target.value) })}
-                className={inputClass}
+                onChange={(e) => {
+                  setSalidaForm({ ...salidaForm, idInsumo: Number(e.target.value) });
+                  clearSalidaError("idInsumo", setSalidaErrors);
+                }}
+                className={fieldClass(salidaErrors.idInsumo)}
               >
                 {insumos.map((insumo) => (
                   <option key={insumo.idInsumo} value={insumo.idInsumo}>
@@ -558,35 +750,56 @@ export function InventarioPage() {
               </select>
             </Field>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Cantidad">
+              <Field label="Cantidad" error={salidaErrors.cantidad}>
                 <input
                   required
                   type="number"
+                  inputMode="decimal"
                   min="0.001"
                   step="0.001"
                   value={salidaForm.cantidad || ""}
-                  onChange={(e) =>
-                    setSalidaForm({ ...salidaForm, cantidad: Number(e.target.value) })
-                  }
-                  className={inputClass}
+                  onKeyDown={(e) => preventInvalidNumberKey(e)}
+                  onChange={(e) => {
+                    setSalidaForm({
+                      ...salidaForm,
+                      cantidad: Number(sanitizeDecimalInput(e.target.value)),
+                    });
+                    clearSalidaError("cantidad", setSalidaErrors);
+                  }}
+                  className={fieldClass(salidaErrors.cantidad)}
                 />
               </Field>
-              <Field label="Orden de trabajo">
+              <Field label="Orden de trabajo" error={salidaErrors.idOrdenTrabajo}>
                 <input
                   type="number"
+                  inputMode="numeric"
+                  min="1"
+                  step="1"
                   value={salidaForm.idOrdenTrabajo ?? ""}
-                  onChange={(e) =>
-                    setSalidaForm({ ...salidaForm, idOrdenTrabajo: optionalNumber(e.target.value) })
-                  }
-                  className={inputClass}
+                  onKeyDown={(e) => preventInvalidNumberKey(e, { decimal: false })}
+                  onChange={(e) => {
+                    setSalidaForm({
+                      ...salidaForm,
+                      idOrdenTrabajo: optionalNumber(onlyDigits(e.target.value)),
+                    });
+                    clearSalidaError("idOrdenTrabajo", setSalidaErrors);
+                  }}
+                  className={fieldClass(salidaErrors.idOrdenTrabajo)}
                 />
               </Field>
             </div>
-            <Field label="Observaciones">
+            <Field label="Observaciones" error={salidaErrors.observaciones}>
               <textarea
+                maxLength={250}
                 value={salidaForm.observaciones}
-                onChange={(e) => setSalidaForm({ ...salidaForm, observaciones: e.target.value })}
-                className={`${inputClass} min-h-20`}
+                onChange={(e) => {
+                  setSalidaForm({
+                    ...salidaForm,
+                    observaciones: sanitizeLongText(e.target.value).slice(0, 250),
+                  });
+                  clearSalidaError("observaciones", setSalidaErrors);
+                }}
+                className={`${fieldClass(salidaErrors.observaciones)} min-h-20`}
               />
             </Field>
             <FormActions
@@ -605,18 +818,26 @@ export function InventarioPage() {
               <Field label="Código">
                 <input
                   value={compraForm.codigo}
-                  onChange={(e) => setCompraForm({ ...compraForm, codigo: e.target.value })}
+                  onKeyDown={(e) => preventInvalidCodeKey(e)}
+                  onChange={(e) => {
+                    setCompraForm({ ...compraForm, codigo: sanitizeCode(e.target.value) });
+                    clearCompraError("codigo", setCompraErrors);
+                  }}
                   placeholder="OC-2026-001"
-                  className={inputClass}
+                  className={fieldClass(compraErrors.codigo)}
                 />
+                {compraErrors.codigo && (
+                  <p className="mt-1 text-xs font-medium text-destructive">{compraErrors.codigo}</p>
+                )}
               </Field>
-              <Field label="Proveedor">
+              <Field label="Proveedor" error={compraErrors.idProveedor}>
                 <select
                   value={compraForm.idProveedor}
-                  onChange={(e) =>
-                    setCompraForm({ ...compraForm, idProveedor: Number(e.target.value) })
-                  }
-                  className={inputClass}
+                  onChange={(e) => {
+                    setCompraForm({ ...compraForm, idProveedor: Number(e.target.value) });
+                    clearCompraError("idProveedor", setCompraErrors);
+                  }}
+                  className={fieldClass(compraErrors.idProveedor)}
                 >
                   {proveedores.map((proveedor) => (
                     <option key={proveedor.idProveedor} value={proveedor.idProveedor}>
@@ -633,15 +854,16 @@ export function InventarioPage() {
               >
                 <select
                   value={detalle.idInsumo}
-                  onChange={(e) =>
+                  onChange={(e) => {
                     updateDetalle(
                       index,
                       { idInsumo: Number(e.target.value) },
                       compraForm,
                       setCompraForm,
-                    )
-                  }
-                  className={`${inputClass} col-span-6`}
+                    );
+                    clearCompraError("detalles", setCompraErrors);
+                  }}
+                  className={`${fieldClass(compraErrors.detalles)} col-span-6`}
                 >
                   {insumos.map((insumo) => (
                     <option key={insumo.idInsumo} value={insumo.idInsumo}>
@@ -651,56 +873,73 @@ export function InventarioPage() {
                 </select>
                 <input
                   type="number"
+                  inputMode="decimal"
                   min="0.001"
                   step="0.001"
                   value={detalle.cantidad}
-                  onChange={(e) =>
+                  onKeyDown={(e) => preventInvalidNumberKey(e)}
+                  onChange={(e) => {
                     updateDetalle(
                       index,
-                      { cantidad: Number(e.target.value) },
+                      { cantidad: Number(sanitizeDecimalInput(e.target.value)) },
                       compraForm,
                       setCompraForm,
-                    )
-                  }
-                  className={`${inputClass} col-span-3`}
+                    );
+                    clearCompraError("detalles", setCompraErrors);
+                  }}
+                  className={`${fieldClass(compraErrors.detalles)} col-span-3`}
                 />
                 <input
                   type="number"
-                  min="0"
+                  inputMode="decimal"
+                  min="0.01"
                   step="0.01"
                   value={detalle.precioUnitario}
-                  onChange={(e) =>
+                  onKeyDown={(e) => preventInvalidNumberKey(e)}
+                  onChange={(e) => {
                     updateDetalle(
                       index,
-                      { precioUnitario: Number(e.target.value) },
+                      { precioUnitario: Number(sanitizeDecimalInput(e.target.value)) },
                       compraForm,
                       setCompraForm,
-                    )
-                  }
-                  className={`${inputClass} col-span-3`}
+                    );
+                    clearCompraError("detalles", setCompraErrors);
+                  }}
+                  className={`${fieldClass(compraErrors.detalles)} col-span-3`}
                 />
               </div>
             ))}
+            {compraErrors.detalles && (
+              <p className="text-xs font-medium text-destructive">{compraErrors.detalles}</p>
+            )}
             <button
               type="button"
-              onClick={() =>
+              onClick={() => {
                 setCompraForm({
                   ...compraForm,
                   detalles: [
                     ...compraForm.detalles,
                     { idInsumo: insumos[0]?.idInsumo || 0, cantidad: 1, precioUnitario: 0 },
                   ],
-                })
-              }
+                });
+                clearCompraError("detalles", setCompraErrors);
+              }}
               className="text-[11px] font-bold uppercase tracking-widest text-cyan-press"
             >
               Añadir ítem
             </button>
-            <Field label="Observaciones">
+            <Field label="Observaciones" error={compraErrors.observaciones}>
               <textarea
+                maxLength={300}
                 value={compraForm.observaciones}
-                onChange={(e) => setCompraForm({ ...compraForm, observaciones: e.target.value })}
-                className={`${inputClass} min-h-20`}
+                onChange={(e) => {
+                  setCompraForm({
+                    ...compraForm,
+                    observaciones: sanitizeLongText(e.target.value).slice(0, 300),
+                  });
+                  clearCompraError("observaciones", setCompraErrors);
+                }}
+                className={`${fieldClass(compraErrors.observaciones)} min-h-20`}
               />
             </Field>
             <FormActions
@@ -1079,13 +1318,22 @@ function Modal({
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  error,
+  children,
+}: {
+  label: string;
+  error?: string;
+  children: React.ReactNode;
+}) {
   return (
     <label className="block">
       <span className="mb-1 block text-[10px] font-mono uppercase tracking-widest text-ink/45">
         {label}
       </span>
       {children}
+      {error && <p className="mt-1 text-xs font-medium text-destructive">{error}</p>}
     </label>
   );
 }
@@ -1156,12 +1404,342 @@ function updateDetalle(
 function cleanInsumo(form: CreateInsumoRequest): CreateInsumoRequest {
   return {
     ...form,
+    nombre: form.nombre.trim(),
     gramaje: form.tipoInsumo === "PAPEL" ? form.gramaje || null : null,
-    medida: form.tipoInsumo === "PAPEL" ? form.medida || null : null,
-    tipoPapel: form.tipoInsumo === "PAPEL" ? form.tipoPapel || null : null,
-    color: form.tipoInsumo === "TINTA" ? form.color || null : null,
-    precioVentaMillar: form.precioVentaMillar || null,
+    medida: form.tipoInsumo === "PAPEL" ? cleanOptionalText(form.medida) : null,
+    tipoPapel: form.tipoInsumo === "PAPEL" ? cleanOptionalText(form.tipoPapel) : null,
+    color: form.tipoInsumo === "TINTA" ? cleanOptionalText(form.color) : null,
+    precioVentaMillar: form.tipoInsumo === "PAPEL" ? form.precioVentaMillar || null : null,
   };
+}
+
+function cleanProveedor(form: CreateProveedorRequest): CreateProveedorRequest {
+  return {
+    ruc: onlyDigits(form.ruc),
+    razonSocial: form.razonSocial.trim().replace(/\s+/g, " "),
+    nombreRepresentante: form.nombreRepresentante?.trim().replace(/\s+/g, " "),
+    direccion: form.direccion?.trim().replace(/\s+/g, " "),
+    telefonoFijo: onlyDigits(form.telefonoFijo ?? ""),
+    telefonoCelular: onlyDigits(form.telefonoCelular ?? ""),
+    correo: form.correo?.trim().toLowerCase(),
+  };
+}
+
+function cleanSalida(form: RegistrarSalidaRequest): RegistrarSalidaRequest {
+  return {
+    ...form,
+    idOrdenTrabajo: form.idOrdenTrabajo || null,
+    observaciones: form.observaciones?.trim(),
+  };
+}
+
+function cleanCompra(form: CreateOrdenCompraRequest): CreateOrdenCompraRequest {
+  return {
+    ...form,
+    codigo: form.codigo?.trim().toUpperCase(),
+    observaciones: form.observaciones?.trim(),
+    detalles: form.detalles.map((detalle) => ({
+      idInsumo: detalle.idInsumo,
+      cantidad: Number(detalle.cantidad),
+      precioUnitario: Number(detalle.precioUnitario),
+    })),
+  };
+}
+
+function validateInsumoForm(form: CreateInsumoRequest, existingInsumos: Insumo[]) {
+  const errors: InsumoFormErrors = {};
+  const normalizedName = normalizeText(form.nombre);
+
+  if (!normalizedName) {
+    errors.nombre = "Ingresa el nombre del insumo.";
+  } else if (normalizedName.length < 3) {
+    errors.nombre = "El nombre debe tener al menos 3 caracteres.";
+  } else if (!hasLetter(normalizedName)) {
+    errors.nombre = "El nombre debe incluir al menos una letra.";
+  } else if (
+    existingInsumos.some(
+      (insumo) => insumo.activo && normalizeText(insumo.nombre) === normalizedName,
+    )
+  ) {
+    errors.nombre = "Ya existe un insumo activo con este nombre.";
+  }
+
+  if (form.unidadMedida !== defaultUnidadByTipo[form.tipoInsumo]) {
+    errors.unidadMedida = `Para ${tipoLabels[form.tipoInsumo]} la unidad debe ser ${defaultUnidadByTipo[form.tipoInsumo]}.`;
+  }
+
+  if (!isValidNumber(form.stockMinimo) || Number(form.stockMinimo) < 0) {
+    errors.stockMinimo = "El stock minimo debe ser cero o mayor.";
+  }
+
+  if (form.tipoInsumo === "PAPEL") {
+    if (!Number.isInteger(Number(form.gramaje)) || Number(form.gramaje) <= 0) {
+      errors.gramaje = "El gramaje debe ser un entero mayor a cero.";
+    }
+    if (!normalizeText(form.medida)) {
+      errors.medida = "Ingresa la medida del papel.";
+    }
+    if (!normalizeText(form.tipoPapel)) {
+      errors.tipoPapel = "Ingresa el tipo de papel.";
+    } else if (!isLettersAndSpaces(form.tipoPapel)) {
+      errors.tipoPapel = "El tipo de papel solo debe contener letras.";
+    }
+    if (!isValidNumber(form.precioVentaMillar) || Number(form.precioVentaMillar) <= 0) {
+      errors.precioVentaMillar = "El precio de venta por millar debe ser mayor a cero.";
+    }
+  }
+
+  if (form.tipoInsumo === "TINTA" && !normalizeText(form.color)) {
+    errors.color = "Ingresa el color de la tinta.";
+  }
+
+  return errors;
+}
+
+function validateProveedorForm(form: CreateProveedorRequest, existingProveedores: Proveedor[]) {
+  const errors: ProveedorFormErrors = {};
+  const razonSocial = normalizeText(form.razonSocial);
+  const representante = normalizeText(form.nombreRepresentante);
+  const direccion = normalizeText(form.direccion);
+
+  if (!/^\d{11}$/.test(form.ruc)) {
+    errors.ruc = "El RUC debe tener exactamente 11 digitos.";
+  } else if (
+    existingProveedores.some((proveedor) => proveedor.activo && proveedor.ruc === form.ruc)
+  ) {
+    errors.ruc = "Ya existe un proveedor activo con este RUC.";
+  }
+
+  if (!razonSocial) {
+    errors.razonSocial = "Ingresa la razon social.";
+  } else if (razonSocial.length < 3) {
+    errors.razonSocial = "La razon social debe tener al menos 3 caracteres.";
+  }
+
+  if (representante && representante.length < 3) {
+    errors.nombreRepresentante = "El representante debe tener al menos 3 caracteres.";
+  }
+
+  if (form.telefonoFijo && !/^\d{6,9}$/.test(form.telefonoFijo)) {
+    errors.telefonoFijo = "El telefono fijo debe tener entre 6 y 9 digitos.";
+  }
+
+  if (form.telefonoCelular && !/^\d{9}$/.test(form.telefonoCelular)) {
+    errors.telefonoCelular = "El celular debe tener 9 digitos.";
+  }
+
+  if (form.correo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.correo)) {
+    errors.correo = "Ingresa un correo valido.";
+  }
+
+  if (direccion && direccion.length < 5) {
+    errors.direccion = "La direccion debe tener al menos 5 caracteres.";
+  }
+
+  return errors;
+}
+
+function validateSalidaForm(form: RegistrarSalidaRequest, existingInsumos: Insumo[]) {
+  const errors: SalidaFormErrors = {};
+  const selectedInsumo = existingInsumos.find((insumo) => insumo.idInsumo === form.idInsumo);
+
+  if (!selectedInsumo) {
+    errors.idInsumo = "Selecciona un insumo valido.";
+  }
+
+  if (!isValidNumber(form.cantidad) || Number(form.cantidad) <= 0) {
+    errors.cantidad = "La cantidad debe ser mayor a cero.";
+  } else if (selectedInsumo && Number(form.cantidad) > Number(selectedInsumo.stockActual)) {
+    errors.cantidad = "La cantidad no puede superar el stock disponible.";
+  }
+
+  if (
+    form.idOrdenTrabajo &&
+    (!Number.isInteger(Number(form.idOrdenTrabajo)) || Number(form.idOrdenTrabajo) <= 0)
+  ) {
+    errors.idOrdenTrabajo = "La orden de trabajo debe ser un numero entero positivo.";
+  }
+
+  if ((form.observaciones?.length ?? 0) > 250) {
+    errors.observaciones = "Las observaciones no deben superar 250 caracteres.";
+  }
+
+  return errors;
+}
+
+function validateCompraForm(
+  form: CreateOrdenCompraRequest,
+  existingInsumos: Insumo[],
+  existingProveedores: Proveedor[],
+) {
+  const errors: CompraFormErrors = {};
+
+  if (form.codigo && !/^[A-Z0-9-]{3,30}$/.test(form.codigo)) {
+    errors.codigo = "Usa 3 a 30 caracteres: letras mayusculas, numeros o guion.";
+  }
+
+  if (!existingProveedores.some((proveedor) => proveedor.idProveedor === form.idProveedor)) {
+    errors.idProveedor = "Selecciona un proveedor valido.";
+  }
+
+  if (form.detalles.length === 0) {
+    errors.detalles = "Agrega al menos un item.";
+  } else {
+    const usedInsumos = new Set<number>();
+    for (const detalle of form.detalles) {
+      if (!existingInsumos.some((insumo) => insumo.idInsumo === detalle.idInsumo)) {
+        errors.detalles = "Cada item debe tener un insumo valido.";
+        break;
+      }
+      if (usedInsumos.has(detalle.idInsumo)) {
+        errors.detalles = "No repitas el mismo insumo en una orden.";
+        break;
+      }
+      if (!isValidNumber(detalle.cantidad) || Number(detalle.cantidad) <= 0) {
+        errors.detalles = "La cantidad de cada item debe ser mayor a cero.";
+        break;
+      }
+      if (!isValidNumber(detalle.precioUnitario) || Number(detalle.precioUnitario) <= 0) {
+        errors.detalles = "El precio unitario de cada item debe ser mayor a cero.";
+        break;
+      }
+      usedInsumos.add(detalle.idInsumo);
+    }
+  }
+
+  if ((form.observaciones?.length ?? 0) > 300) {
+    errors.observaciones = "Las observaciones no deben superar 300 caracteres.";
+  }
+
+  return errors;
+}
+
+function cleanOptionalText(value?: string | null) {
+  const cleaned = value?.trim();
+  return cleaned ? cleaned : null;
+}
+
+function normalizeText(value?: string | null) {
+  return value?.trim().replace(/\s+/g, " ").toLowerCase() ?? "";
+}
+
+function isValidNumber(value: number | null | undefined) {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function hasLetter(value: string) {
+  return /\p{L}/u.test(value);
+}
+
+function isLettersAndSpaces(value: string) {
+  return /^[\p{L}\s]+$/u.test(value.trim());
+}
+
+function onlyDigits(value: string) {
+  return value.replace(/\D/g, "");
+}
+
+function sanitizeDecimalInput(value: string) {
+  const normalized = value.replace(",", ".").replace(/[^\d.]/g, "");
+  const [integerPart, ...decimalParts] = normalized.split(".");
+  return decimalParts.length > 0 ? `${integerPart}.${decimalParts.join("")}` : integerPart;
+}
+
+function sanitizePersonName(value: string) {
+  return value.replace(/[^\p{L}\s]/gu, "").replace(/\s{2,}/g, " ");
+}
+
+function sanitizeBusinessText(value: string) {
+  return value.replace(/[^\p{L}\p{N}\s.&,#/-]/gu, "").replace(/\s{2,}/g, " ");
+}
+
+function sanitizeAddress(value: string) {
+  return value.replace(/[^\p{L}\p{N}\s.&,#°º/-]/gu, "").replace(/\s{2,}/g, " ");
+}
+
+function sanitizeLongText(value: string) {
+  return value.replace(/[^\p{L}\p{N}\s.,;:()#°º/-]/gu, "").replace(/\s{2,}/g, " ");
+}
+
+function sanitizeCode(value: string) {
+  return value
+    .toUpperCase()
+    .replace(/[^A-Z0-9-]/g, "")
+    .slice(0, 30);
+}
+
+function sanitizeEmail(value: string) {
+  return value.trim().replace(/[^A-Za-z0-9._%+-@]/g, "");
+}
+
+function preventInvalidNumberKey(
+  event: React.KeyboardEvent<HTMLInputElement>,
+  options: { decimal?: boolean } = {},
+) {
+  const allowsDecimal = options.decimal ?? true;
+  const blockedKeys = ["e", "E", "+", "-", ","];
+
+  if (!allowsDecimal) {
+    blockedKeys.push(".");
+  }
+
+  if (blockedKeys.includes(event.key)) {
+    event.preventDefault();
+  }
+}
+
+function preventInvalidCodeKey(event: React.KeyboardEvent<HTMLInputElement>) {
+  if (event.key.length === 1 && !/[a-zA-Z0-9-]/.test(event.key)) {
+    event.preventDefault();
+  }
+}
+
+function clearInsumoError(
+  field: keyof InsumoFormErrors,
+  setInsumoErrors: React.Dispatch<React.SetStateAction<InsumoFormErrors>>,
+) {
+  setInsumoErrors((current) => {
+    if (!current[field]) return current;
+    const next = { ...current };
+    delete next[field];
+    return next;
+  });
+}
+
+function clearProveedorError(
+  field: keyof ProveedorFormErrors,
+  setProveedorErrors: React.Dispatch<React.SetStateAction<ProveedorFormErrors>>,
+) {
+  setProveedorErrors((current) => {
+    if (!current[field]) return current;
+    const next = { ...current };
+    delete next[field];
+    return next;
+  });
+}
+
+function clearSalidaError(
+  field: keyof SalidaFormErrors,
+  setSalidaErrors: React.Dispatch<React.SetStateAction<SalidaFormErrors>>,
+) {
+  setSalidaErrors((current) => {
+    if (!current[field]) return current;
+    const next = { ...current };
+    delete next[field];
+    return next;
+  });
+}
+
+function clearCompraError(
+  field: keyof CompraFormErrors,
+  setCompraErrors: React.Dispatch<React.SetStateAction<CompraFormErrors>>,
+) {
+  setCompraErrors((current) => {
+    if (!current[field]) return current;
+    const next = { ...current };
+    delete next[field];
+    return next;
+  });
 }
 
 function describeInsumo(insumo: Insumo) {
@@ -1195,6 +1773,10 @@ function formatDate(value?: string | null) {
     month: "short",
     year: "numeric",
   }).format(new Date(value));
+}
+
+function fieldClass(error?: string) {
+  return `${inputClass} ${error ? "border-destructive focus:ring-destructive/30" : ""}`;
 }
 
 const inputClass =
