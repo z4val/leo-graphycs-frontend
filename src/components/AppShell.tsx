@@ -6,10 +6,11 @@ import { useState } from "react";
 const navItems = [
   { to: "/dashboard", label: "Tablero", code: "01" },
   { to: "/cotizaciones", label: "Cotizaciones", code: "02" },
-  { to: "/inventario", label: "Inventario", code: "03" },
-  { to: "/cobros", label: "Cobros", code: "04", roles: ["Contador", "Gerente", "Administrador"] },
-  { to: "/usuarios", label: "Usuarios", code: "05" },
-  { to: "/bi", label: "Tablero BI", code: "06" },
+  { to: "/clientes", label: "Clientes", code: "03" },
+  { to: "/inventario", label: "Inventario", code: "04" },
+  { to: "/cobros", label: "Cobros", code: "05", roles: ["Contador", "Gerente", "Administrador"] },
+  { to: "/usuarios", label: "Usuarios", code: "06" },
+  { to: "/bi", label: "Tablero BI", code: "07" },
 ] as const;
 
 interface AppShellProps {

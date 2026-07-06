@@ -7,9 +7,14 @@ export interface CobrosResumen {
 }
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  const isFormData = options?.body instanceof FormData;
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
-    headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    headers: {
+      ...(isFormData ? {} : { "Content-Type": "application/json" }),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options?.headers,
+    },
   });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
@@ -20,6 +25,31 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 export const pagosService = {
   medios: () => request<MedioPago[]>("/medios-pago"),
   resumen: () => request<CobrosResumen>("/cobros/resumen"),
-  registrar: (id: string, idMedioPago: number, monto: number, observaciones?: string) =>
-    request<Pago>(`/ordenes/${id}/pagos`, { method: "POST", body: JSON.stringify({ idMedioPago, monto, observaciones }) }),
+  registrar: (
+    id: string,
+    idMedioPago: number,
+    monto: number,
+    observaciones?: string,
+    numeroOperacion?: string,
+    comprobante?: File | null,
+  ) => {
+    if (comprobante) {
+      const body = new FormData();
+      body.append("idMedioPago", String(idMedioPago));
+      body.append("monto", String(monto));
+      if (observaciones) body.append("observaciones", observaciones);
+      if (numeroOperacion) body.append("numeroOperacion", numeroOperacion);
+      body.append("comprobante", comprobante);
+      return request<Pago>(`/ordenes/${id}/pagos`, { method: "POST", body });
+    }
+    return request<Pago>(`/ordenes/${id}/pagos`, {
+      method: "POST",
+      body: JSON.stringify({ idMedioPago, monto, observaciones, numeroOperacion }),
+    });
+  },
+  anular: (idOrden: string, idPago: number, motivo: string) =>
+    request<Pago>(`/ordenes/${idOrden}/pagos/${idPago}/anular`, {
+      method: "PATCH",
+      body: JSON.stringify({ motivo }),
+    }),
 };

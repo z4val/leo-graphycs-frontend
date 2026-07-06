@@ -37,4 +37,12 @@ export const kanbanService = {
     request<WorkOrder>(`/kanban/ordenes/${id}/control-calidad`, {
       method: "POST", body: JSON.stringify({ resultado, cantidadVerificada, observaciones }),
     }),
+  registrarObservacion: (id: string, observaciones: string) =>
+    request<WorkOrder>(`/kanban/ordenes/${id}/observaciones`, {
+      method: "POST", body: JSON.stringify({ observaciones }),
+    }),
+  enviarFeedbackCliente: (id: string, mensaje: string) =>
+    request<WorkOrder>(`/kanban/ordenes/${id}/feedback-cliente`, {
+      method: "POST", body: JSON.stringify({ mensaje }),
+    }),
 };

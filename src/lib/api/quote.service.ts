@@ -188,6 +188,35 @@ export interface CreateClienteRequest {
   correo?: string;
 }
 
+export interface ClienteCotizacionResumen {
+  idCotizacion: number;
+  codigo: string;
+  estado: string;
+  origen: OrigenCotizacion;
+  descripcion?: string | null;
+  cantidad: number;
+  montoTotal: number;
+  fechaCreacion: string;
+  fechaCompromiso?: string | null;
+}
+
+export interface ClienteOrdenResumen {
+  idOrdenTrabajo: number;
+  codigo: string;
+  estado: string;
+  montoTotal: number;
+  fechaCreacion: string;
+  fechaEstimadaEntrega?: string | null;
+  fechaEntregaReal?: string | null;
+  numeroReprocesos: number;
+}
+
+export interface ClienteDetalle {
+  cliente: Cliente;
+  cotizaciones: ClienteCotizacionResumen[];
+  ordenes: ClienteOrdenResumen[];
+}
+
 export interface CreateCotizacionRequest {
   idCliente: number;
   idTipoProducto?: number;
@@ -229,13 +258,21 @@ async function request<T>(path: string, method: HttpMethod = "GET", body?: unkno
     throw new Error(errorData.error || errorData.message || `Error HTTP ${response.status}`);
   }
 
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
   return response.json();
 }
 
 export const quoteService = {
   getTiposProducto: () => request<TipoProducto[]>("/tipo-productos"),
   getClientes: () => request<Cliente[]>("/clientes"),
+  getClienteDetalle: (id: number) => request<ClienteDetalle>(`/clientes/${id}`),
   createCliente: (payload: CreateClienteRequest) => request<Cliente>("/clientes", "POST", payload),
+  updateCliente: (id: number, payload: CreateClienteRequest) =>
+    request<Cliente>(`/clientes/${id}`, "PUT", payload),
+  deleteCliente: (id: number) => request<void>(`/clientes/${id}`, "DELETE"),
 
   getCatalogoCotizacion: () => request<CatalogoCotizacion>("/catalogo/cotizacion"),
   calcularCotizacion: (payload: CosteoRequest) =>

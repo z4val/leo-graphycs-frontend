@@ -236,6 +236,15 @@ export interface Pago {
   usuario: string;
 
   observaciones?: string;
+  numeroOperacion?: string;
+  comprobanteNombre?: string;
+  comprobanteContentType?: string;
+  comprobanteTamanoBytes?: number;
+  comprobanteUrl?: string;
+  anulado?: boolean;
+  fechaAnulacion?: string;
+  motivoAnulacion?: string;
+  usuarioAnulacion?: string;
 
 }
 
