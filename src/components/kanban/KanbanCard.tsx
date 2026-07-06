@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Calendar, ChevronRight, Clock, Layers, Palette, User } from "lucide-react";
-import type { WorkOrder } from "./types";
+import type { EstadoEtiquetaVariant, OrderPriority, WorkOrder } from "./types";
 import { sumEntregas } from "./types";
 import { cn } from "@/lib/utils";
 import {
@@ -11,7 +11,7 @@ import {
 } from "./format";
 import { WorkOrderDetailModal } from "./WorkOrderDetailModal";
 
-const etiquetaClasses: Record<WorkOrder["etiquetaVariant"], string> = {
+const etiquetaClasses: Record<EstadoEtiquetaVariant, string> = {
   cyan: "bg-cyan-press/20 text-ink/80 border-cyan-press/30",
   magenta: "bg-magenta-press/20 text-ink/80 border-magenta-press/30",
   yellow: "bg-yellow-press/25 text-ink/80 border-yellow-press/40",
@@ -20,17 +20,18 @@ const etiquetaClasses: Record<WorkOrder["etiquetaVariant"], string> = {
   neutral: "bg-ink/5 text-ink/60 border-ink/10",
 };
 
-const prioridadClasses: Record<WorkOrder["prioridad"], string> = {
+const prioridadClasses: Record<OrderPriority, string> = {
   baja: "bg-ink/5 text-ink/50 border-ink/10",
   media: "bg-yellow-press/25 text-ink/70 border-yellow-press/40",
   alta: "bg-destructive/10 text-destructive border-destructive/25",
 };
 
-interface KanbanCardProps {
-  order: WorkOrder;
-}
-
-export function KanbanCard({ order }: KanbanCardProps) {
+interface KanbanCardProps {
+  order: WorkOrder;
+  onOrderUpdated?: (order: WorkOrder) => void;
+}
+
+export function KanbanCard({ order, onOrderUpdated }: KanbanCardProps) {
   const [open, setOpen] = useState(false);
   const { cotizacion: c } = order;
   const entregado = sumEntregas(order.entregas);
@@ -106,10 +107,10 @@ export function KanbanCard({ order }: KanbanCardProps) {
           <span
             className={cn(
               "inline-flex text-[10px] font-semibold px-2 py-0.5 rounded border",
-              etiquetaClasses[order.etiquetaVariant],
+              etiquetaClasses[order.etiquetaVariant ?? "neutral"],
             )}
           >
-            {order.etiquetaEstado}
+            {order.etiquetaEstado ?? labelEstadoOrden(order.estado)}
           </span>
           <span className="text-[10px] text-ink/40 font-mono">
             {labelEstadoOrden(order.estado)}
@@ -148,10 +149,10 @@ export function KanbanCard({ order }: KanbanCardProps) {
           <span
             className={cn(
               "shrink-0 text-[10px] font-bold px-2 py-0.5 rounded border capitalize",
-              prioridadClasses[order.prioridad],
+              prioridadClasses[order.prioridad ?? "media"],
             )}
           >
-            {order.prioridad}
+            {order.prioridad ?? "media"}
           </span>
         </div>
 
@@ -167,8 +168,8 @@ export function KanbanCard({ order }: KanbanCardProps) {
         </p>
       </article>
 
-      <WorkOrderDetailModal order={order} open={open} onOpenChange={setOpen} />
+      <WorkOrderDetailModal order={order} open={open} onOpenChange={setOpen} onOrderUpdated={onOrderUpdated} />
     </>
   );
 }
-
+

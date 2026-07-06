@@ -1,4 +1,8 @@
-import type { ReactNode } from "react";
+import type { FormEvent, ReactNode } from "react";
+import { useEffect, useState } from "react";
+import { kanbanService } from "@/lib/api/kanban.service";
+import { pagosService, type MedioPago } from "@/lib/api/pagos.service";
+import { inventoryService, type Insumo } from "@/lib/api/inventory.service";
 import {
   Dialog,
 
@@ -41,12 +45,13 @@ interface WorkOrderDetailModalProps {
   open: boolean;
 
   onOpenChange: (open: boolean) => void;
+  onOrderUpdated?: (order: WorkOrder) => void;
 
 }
 
 
 
-export function WorkOrderDetailModal({ order, open, onOpenChange }: WorkOrderDetailModalProps) {
+export function WorkOrderDetailModal({ order, open, onOpenChange, onOrderUpdated }: WorkOrderDetailModalProps) {
 
   if (!order) return null;
 
@@ -109,6 +114,7 @@ export function WorkOrderDetailModal({ order, open, onOpenChange }: WorkOrderDet
 
 
         <div className="px-6 py-5 space-y-8">
+          <OperationalActions order={order} onUpdated={onOrderUpdated} />
 
           <Section title="Cliente">
 
@@ -629,6 +635,75 @@ export function WorkOrderDetailModal({ order, open, onOpenChange }: WorkOrderDet
 }
 
 
+
+function OperationalActions({ order, onUpdated }: { order: WorkOrder; onUpdated?: (order: WorkOrder) => void }) {
+  const [medios, setMedios] = useState<MedioPago[]>([]);
+  const [insumos, setInsumos] = useState<Insumo[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    Promise.all([pagosService.medios(), inventoryService.getInsumos()])
+      .then(([m, i]) => { setMedios(m); setInsumos(i); })
+      .catch(() => undefined);
+  }, []);
+  const run = async (action: () => Promise<WorkOrder>) => {
+    setBusy(true); setError("");
+    try { onUpdated?.(await action()); } catch (e) { setError(e instanceof Error ? e.message : "No se pudo completar la acción"); }
+    finally { setBusy(false); }
+  };
+  const advance = order.estado === "PRE_PRENSA" ? "PRENSA" : order.estado === "PRENSA" ? "POST_PRENSA" : "ENTREGADO";
+  const submitPago = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault(); const fd = new FormData(e.currentTarget);
+    setBusy(true); setError("");
+    try {
+      await pagosService.registrar(order.id, Number(fd.get("medio")), Number(fd.get("monto")));
+      onUpdated?.((await kanbanService.listarOrdenes()).find(o => o.id === order.id)!);
+      e.currentTarget.reset();
+    } catch (x) { setError(x instanceof Error ? x.message : "No se pudo registrar el pago"); } finally { setBusy(false); }
+  };
+  const submitConsumo = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault(); const fd = new FormData(e.currentTarget); setBusy(true); setError("");
+    try {
+      await inventoryService.registrarSalida({ idInsumo: Number(fd.get("insumo")), cantidad: Number(fd.get("cantidad")), idOrdenTrabajo: Number(order.id) });
+      e.currentTarget.reset();
+    } catch (x) { setError(x instanceof Error ? x.message : "No se pudo registrar el consumo"); } finally { setBusy(false); }
+  };
+  const input = "w-full rounded border border-ink/15 px-2 py-1.5 text-xs bg-white";
+  const button = "rounded bg-ink text-paper px-3 py-2 text-xs font-semibold disabled:opacity-50";
+  return (
+    <Section title="Acciones operativas">
+      {error && <p className="mb-3 text-xs text-destructive">{error}</p>}
+      <div className="grid sm:grid-cols-2 gap-3">
+        {order.estado === "PRE_PRENSA" && order.aprobacionesDiseno.length === 0 && (
+          <button disabled={busy} className={button} onClick={() => run(() => kanbanService.registrarAprobacion(order.id, order.cliente.nombre))}>Registrar aprobación de diseño</button>
+        )}
+        {order.estado === "POST_PRENSA" && (
+          <button disabled={busy} className={button} onClick={() => run(() => kanbanService.registrarControl(order.id, "APROBADO", order.cotizacion.cantidad))}>Aprobar control de calidad</button>
+        )}
+        <button disabled={busy} className={button} onClick={() => run(() => kanbanService.cambiarEstado(order.id, advance))}>Avanzar etapa</button>
+        {order.estado === "POST_PRENSA" && <button disabled={busy} className={button} onClick={() => run(() => kanbanService.cambiarEstado(order.id, "PRE_PRENSA", "Reproceso"))}>Enviar a reproceso</button>}
+      </div>
+      <div className="grid lg:grid-cols-3 gap-4 mt-4">
+        <form className="space-y-2" onSubmit={e => { e.preventDefault(); const f=new FormData(e.currentTarget); run(() => kanbanService.registrarEntrega(order.id, Number(f.get("cantidad")))); }}>
+          <p className="text-xs font-semibold">Entrega parcial</p><input className={input} required min="0.01" step="0.01" name="cantidad" type="number" placeholder="Cantidad" />
+          <button disabled={busy} className={button}>Registrar entrega</button>
+        </form>
+        <form className="space-y-2" onSubmit={submitPago}>
+          <p className="text-xs font-semibold">Registrar pago</p>
+          <select className={input} required name="medio"><option value="">Medio de pago</option>{medios.map(m => <option key={m.idMedioPago} value={m.idMedioPago}>{m.nombre}</option>)}</select>
+          <input className={input} required min="0.01" step="0.01" max={order.saldoPendiente} name="monto" type="number" placeholder="Monto" />
+          <button disabled={busy} className={button}>Registrar pago</button>
+        </form>
+        <form className="space-y-2" onSubmit={submitConsumo}>
+          <p className="text-xs font-semibold">Consumo de insumo</p>
+          <select className={input} required name="insumo"><option value="">Insumo</option>{insumos.map(i => <option key={i.idInsumo} value={i.idInsumo}>{i.nombre} ({i.stockActual})</option>)}</select>
+          <input className={input} required min="0.001" step="0.001" name="cantidad" type="number" placeholder="Cantidad" />
+          <button disabled={busy} className={button}>Registrar consumo</button>
+        </form>
+      </div>
+    </Section>
+  );
+}
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
 

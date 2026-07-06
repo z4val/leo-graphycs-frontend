@@ -15,6 +15,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as InventarioRouteImport } from './routes/inventario'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as CotizacionesRouteImport } from './routes/cotizaciones'
+import { Route as CobrosRouteImport } from './routes/cobros'
 import { Route as BiRouteImport } from './routes/bi'
 import { Route as IndexRouteImport } from './routes/index'
 
@@ -48,6 +49,11 @@ const CotizacionesRoute = CotizacionesRouteImport.update({
   path: '/cotizaciones',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CobrosRoute = CobrosRouteImport.update({
+  id: '/cobros',
+  path: '/cobros',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const BiRoute = BiRouteImport.update({
   id: '/bi',
   path: '/bi',
@@ -61,6 +67,7 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/cobros': typeof CobrosRoute
   '/bi': typeof BiRoute
   '/cotizaciones': typeof CotizacionesRoute
   '/dashboard': typeof DashboardRoute
@@ -71,6 +78,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/cobros': typeof CobrosRoute
   '/bi': typeof BiRoute
   '/cotizaciones': typeof CotizacionesRoute
   '/dashboard': typeof DashboardRoute
@@ -82,6 +90,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/cobros': typeof CobrosRoute
   '/bi': typeof BiRoute
   '/cotizaciones': typeof CotizacionesRoute
   '/dashboard': typeof DashboardRoute
@@ -94,6 +103,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/cobros'
     | '/bi'
     | '/cotizaciones'
     | '/dashboard'
@@ -104,6 +114,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/cobros'
     | '/bi'
     | '/cotizaciones'
     | '/dashboard'
@@ -114,6 +125,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/cobros'
     | '/bi'
     | '/cotizaciones'
     | '/dashboard'
@@ -125,6 +137,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CobrosRoute: typeof CobrosRoute
   BiRoute: typeof BiRoute
   CotizacionesRoute: typeof CotizacionesRoute
   DashboardRoute: typeof DashboardRoute
@@ -178,6 +191,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CotizacionesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/cobros': {
+      id: '/cobros'
+      path: '/cobros'
+      fullPath: '/cobros'
+      preLoaderRoute: typeof CobrosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/bi': {
       id: '/bi'
       path: '/bi'
@@ -197,6 +217,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CobrosRoute: CobrosRoute,
   BiRoute: BiRoute,
   CotizacionesRoute: CotizacionesRoute,
   DashboardRoute: DashboardRoute,

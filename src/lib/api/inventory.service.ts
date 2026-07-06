@@ -323,11 +323,11 @@ export const inventoryService = {
     ),
 
   getMovimientos: (filters?: KardexFilters) =>
-    request<MovimientoInventario[]>(paths.movimientos.map((path) => `${path}${toQuery(filters)}`)),
+    request<MovimientoInventario[]>(paths.movimientos.map((path) => `${path}${toQuery(filters ? { ...filters } : undefined)}`)),
   exportKardexXlsx: async (filters?: KardexFilters) => {
     const blob = await requestBlob(
       paths.movimientos.map((path) => `${path}/export`),
-      filters,
+      filters ? { ...filters } : undefined,
     );
     downloadBlob(blob, `kardex_${new Date().toISOString().slice(0, 10)}.xlsx`);
   },

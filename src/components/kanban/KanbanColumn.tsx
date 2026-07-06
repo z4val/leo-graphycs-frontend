@@ -6,9 +6,10 @@ import { accentBg15 } from "@/components/accent-classes";
 interface KanbanColumnProps {
   config: KanbanPhaseConfig;
   orders: WorkOrder[];
+  onOrderUpdated?: (order: WorkOrder) => void;
 }
 
-export function KanbanColumn({ config, orders }: KanbanColumnProps) {
+export function KanbanColumn({ config, orders, onOrderUpdated }: KanbanColumnProps) {
   const Icon = config.icon;
   const countClass = accentBg15[config.accent];
 
@@ -35,7 +36,7 @@ export function KanbanColumn({ config, orders }: KanbanColumnProps) {
             Sin órdenes
           </p>
         ) : (
-          orders.map((order) => <KanbanCard key={order.id} order={order} />)
+          orders.map((order) => <KanbanCard key={order.id} order={order} onOrderUpdated={onOrderUpdated} />)
         )}
       </div>
     </section>
