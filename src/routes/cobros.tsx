@@ -1,5 +1,6 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
+
 import { AppShell } from "@/components/AppShell";
 import { formatSoles } from "@/components/kanban/format";
 import { authService } from "@/lib/api/auth.service";
@@ -38,7 +39,9 @@ function CobrosPage() {
     () =>
       (data?.ordenes ?? []).filter(
         (order) =>
-          order.cliente.nombre.toLowerCase().includes(query.toLowerCase()) &&
+          `${order.cliente.nombre} ${order.codigo} ${order.cotizacion.tipoProducto}`
+            .toLowerCase()
+            .includes(query.toLowerCase()) &&
           (status === "todos" ||
             (status === "saldadas" ? order.saldoPendiente <= 0 : order.saldoPendiente > 0)),
       ),
@@ -71,7 +74,7 @@ function CobrosPage() {
           <div className="flex flex-wrap gap-3">
             <input
               className="rounded border px-3 py-2"
-              placeholder="Buscar cliente"
+              placeholder="Buscar cliente, orden o producto"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
@@ -108,18 +111,167 @@ function CobroRow({
   onDone: () => void;
   onError: (error: string) => void;
 }) {
+  const pagosActivos = order.pagos.filter((pago) => !pago.anulado);
+  const pagosAnulados = order.pagos.filter((pago) => pago.anulado);
+  const estaSaldada = order.saldoPendiente <= 0;
+
+  return (
+    <details className="overflow-hidden rounded-xl border bg-white shadow-sm">
+      <summary className="grid cursor-pointer list-none items-center gap-3 p-4 transition hover:bg-ink/[0.02] md:grid-cols-[1fr_auto_auto_auto]">
+        <div className="min-w-0">
+          <p className="truncate font-semibold">{order.cliente.nombre}</p>
+          <p className="text-xs text-ink/50">
+            {order.codigo} · {order.cotizacion.tipoProducto}
+          </p>
+        </div>
+        <Money label="Total" value={order.montoTotal} />
+        <Money label="Pagado" value={order.totalPagado} />
+        <div className="flex items-center justify-between gap-3 md:justify-end">
+          <Money label="Saldo" value={order.saldoPendiente} danger={!estaSaldada} />
+          <span
+            className={`rounded border px-2 py-1 text-[10px] font-bold uppercase tracking-wider ${
+              estaSaldada
+                ? "border-emerald-press/30 bg-emerald-press/10 text-emerald-press"
+                : "border-yellow-press/40 bg-yellow-press/20 text-ink/70"
+            }`}
+          >
+            {estaSaldada ? "Pagada" : "Pendiente"}
+          </span>
+        </div>
+      </summary>
+
+      <div className="border-t border-ink/10 bg-ink/[0.015] p-4">
+        <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
+          <div>
+            <p className="mb-2 text-xs font-bold uppercase tracking-widest text-ink/45">
+              Sub-transacciones / amortizaciones
+            </p>
+            {order.pagos.length === 0 ? (
+              <p className="rounded-lg border border-ink/10 bg-white p-3 text-xs text-ink/45">
+                Esta orden aun no registra abonos.
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {pagosActivos.map((pago) => (
+                  <li
+                    key={pago.idPago ?? `${pago.fecha}-${pago.monto}`}
+                    className="grid gap-2 rounded-lg border border-ink/10 bg-white p-3 text-xs md:grid-cols-[1fr_auto]"
+                  >
+                    <div>
+                      <p className="font-semibold">
+                        {pago.medioPago} · {formatSoles(pago.monto)}
+                      </p>
+                      <p className="text-ink/45">
+                        {pago.fecha} · {pago.usuario}
+                      </p>
+                      {pago.numeroOperacion && (
+                        <p className="font-mono text-[10px] text-ink/40">Op. {pago.numeroOperacion}</p>
+                      )}
+                      {pago.observaciones && <p className="mt-1 text-ink/60">{pago.observaciones}</p>}
+                    </div>
+                    {pago.comprobanteUrl && (
+                      <a
+                        href={pago.comprobanteUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="self-start rounded border border-cyan-press/30 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-cyan-press"
+                      >
+                        Comprobante
+                      </a>
+                    )}
+                  </li>
+                ))}
+                {pagosAnulados.map((pago) => (
+                  <li
+                    key={pago.idPago ?? `${pago.fecha}-${pago.monto}-anulado`}
+                    className="rounded-lg border border-destructive/20 bg-destructive/5 p-3 text-xs text-destructive/80"
+                  >
+                    Pago anulado · {formatSoles(pago.monto)} · {pago.motivoAnulacion ?? "Sin motivo"}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="space-y-3">
+            <p className="text-xs font-bold uppercase tracking-widest text-ink/45">
+              {estaSaldada ? "Orden pagada" : "Registrar amortizacion"}
+            </p>
+            {estaSaldada ? (
+              <div className="rounded-lg border border-emerald-press/25 bg-emerald-press/5 p-4 text-sm text-ink/70">
+                La orden principal ya aparece como pagada porque su saldo pendiente es cero.
+              </div>
+            ) : (
+              <>
+                <PaymentForm
+                  orderId={order.id}
+                  medios={medios}
+                  maxAmount={order.saldoPendiente}
+                  submitLabel="Registrar abono"
+                  onDone={onDone}
+                  onError={onError}
+                />
+                <div className="rounded-lg border border-ink/10 bg-white p-3">
+                  <p className="mb-2 text-xs text-ink/50">
+                    Cerrar deuda completa por {formatSoles(order.saldoPendiente)}.
+                  </p>
+                  <PaymentForm
+                    orderId={order.id}
+                    medios={medios}
+                    maxAmount={order.saldoPendiente}
+                    fixedAmount={order.saldoPendiente}
+                    submitLabel="Pagar saldo completo"
+                    onDone={onDone}
+                    onError={onError}
+                  />
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </details>
+  );
+}
+
+function PaymentForm({
+  orderId,
+  medios,
+  maxAmount,
+  fixedAmount,
+  submitLabel,
+  onDone,
+  onError,
+}: {
+  orderId: string;
+  medios: MedioPago[];
+  maxAmount: number;
+  fixedAmount?: number;
+  submitLabel: string;
+  onDone: () => void;
+  onError: (error: string) => void;
+}) {
   return (
     <form
-      className="grid items-center gap-3 rounded-xl border bg-white p-4 xl:grid-cols-[1fr_auto_auto_auto_auto_auto_auto]"
+      className="space-y-2 rounded-lg border border-ink/10 bg-white p-3"
       onSubmit={async (event) => {
         event.preventDefault();
         const form = new FormData(event.currentTarget);
+        const monto = fixedAmount ?? Number(form.get("monto"));
         const file = form.get("comprobante");
+        if (!Number.isFinite(monto) || monto <= 0) {
+          onError("El monto debe ser mayor a cero");
+          return;
+        }
+        if (monto > maxAmount) {
+          onError(`El abono no puede superar el saldo pendiente (${formatSoles(maxAmount)})`);
+          return;
+        }
         try {
           await pagosService.registrar(
-            order.id,
+            orderId,
             Number(form.get("medio")),
-            Number(form.get("monto")),
+            monto,
             String(form.get("observaciones") ?? ""),
             String(form.get("numeroOperacion") ?? ""),
             file instanceof File && file.size > 0 ? file : null,
@@ -127,18 +279,12 @@ function CobroRow({
           onDone();
           event.currentTarget.reset();
         } catch (error) {
-          onError(error instanceof Error ? error.message : "No se pudo registrar");
+          onError(error instanceof Error ? error.message : "No se pudo registrar el pago");
         }
       }}
     >
-      <div>
-        <p className="font-semibold">{order.cliente.nombre}</p>
-        <p className="text-xs text-ink/50">
-          {order.codigo} · Saldo {formatSoles(order.saldoPendiente)}
-        </p>
-      </div>
-      <select name="medio" required className="rounded border px-2 py-1.5 text-sm">
-        <option value="">Medio</option>
+      <select name="medio" required className="w-full rounded border px-2 py-1.5 text-sm">
+        <option value="">Medio de pago</option>
         {medios.map((medio) => (
           <option key={medio.idMedioPago} value={medio.idMedioPago}>
             {medio.nombre}
@@ -147,37 +293,40 @@ function CobroRow({
       </select>
       <input
         name="monto"
-        required
+        required={fixedAmount == null}
+        disabled={fixedAmount != null}
         type="number"
         min="0.01"
         step="0.01"
-        max={order.saldoPendiente}
+        max={maxAmount}
+        value={fixedAmount ?? undefined}
         placeholder="Monto"
-        className="w-28 rounded border px-2 py-1.5"
+        className="w-full rounded border px-2 py-1.5 text-sm disabled:bg-ink/5"
+        readOnly={fixedAmount != null}
       />
-      <input
-        name="numeroOperacion"
-        placeholder="Operación"
-        className="w-32 rounded border px-2 py-1.5 text-sm"
-      />
-      <input
-        name="observaciones"
-        placeholder="Observación"
-        className="w-36 rounded border px-2 py-1.5 text-sm"
-      />
+      <input name="numeroOperacion" placeholder="Operacion" className="w-full rounded border px-2 py-1.5 text-sm" />
+      <input name="observaciones" placeholder="Observacion" className="w-full rounded border px-2 py-1.5 text-sm" />
       <input
         name="comprobante"
         type="file"
         accept="image/png,image/jpeg,image/webp,application/pdf"
-        className="max-w-44 text-xs"
+        className="w-full text-xs"
       />
-      <button
-        disabled={order.saldoPendiente <= 0}
-        className="rounded bg-ink px-3 py-2 text-xs text-paper disabled:opacity-40"
-      >
-        {order.saldoPendiente <= 0 ? "Saldada" : "Registrar"}
+      <button className="w-full rounded bg-ink px-3 py-2 text-xs font-semibold text-paper">
+        {submitLabel}
       </button>
     </form>
+  );
+}
+
+function Money({ label, value, danger }: { label: string; value: number; danger?: boolean }) {
+  return (
+    <div className="min-w-24">
+      <p className="text-[10px] font-mono uppercase tracking-widest text-ink/40">{label}</p>
+      <p className={`font-mono text-sm font-bold ${danger ? "text-destructive" : "text-ink/75"}`}>
+        {formatSoles(value)}
+      </p>
+    </div>
   );
 }
 

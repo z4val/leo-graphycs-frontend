@@ -5,6 +5,8 @@ import {
   Calendar,
   CheckCircle2,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   CircleDot,
   Coins,
   FileText,
@@ -343,10 +345,22 @@ export function CotizacionesPage() {
   const [loading, setLoading] = useState(true);
   const [selectedQuote, setSelectedQuote] = useState<Cotizacion | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [historyPage, setHistoryPage] = useState(1);
+  const historyPageSize = 8;
 
   useEffect(() => {
     loadData();
   }, []);
+
+  const totalHistoryPages = Math.max(1, Math.ceil(quotes.length / historyPageSize));
+  const paginatedQuotes = quotes.slice(
+    (historyPage - 1) * historyPageSize,
+    historyPage * historyPageSize,
+  );
+
+  useEffect(() => {
+    setHistoryPage((page) => Math.min(page, totalHistoryPages));
+  }, [totalHistoryPages]);
 
   const loadData = async () => {
     setLoading(true);
@@ -465,60 +479,69 @@ export function CotizacionesPage() {
                 No hay cotizaciones registradas.
               </div>
             ) : (
-              <ul className="divide-y divide-ink/5">
-                {quotes.map((q) => (
-                  <li
-                    key={q.idCotizacion}
-                    onClick={() => selectQuote(q)}
-                    className={
-                      "flex items-center justify-between px-5 py-4 cursor-pointer transition-colors " +
-                      (selectedQuote?.idCotizacion === q.idCotizacion
-                        ? "bg-cyan-press/5 border-l-4 border-cyan-press pl-4"
-                        : "hover:bg-ink/1")
-                    }
-                  >
-                    <div className="flex items-center gap-4 min-w-0">
-                      <span className="text-[10px] font-mono text-ink/40 w-16 shrink-0">
-                        {q.codigo}
-                      </span>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className="font-display font-bold text-sm truncate text-ink/80">
-                            {q.clienteNombre}
+              <>
+                <ul className="divide-y divide-ink/5">
+                  {paginatedQuotes.map((q) => (
+                    <li
+                      key={q.idCotizacion}
+                      onClick={() => selectQuote(q)}
+                      className={
+                        "flex items-center justify-between px-5 py-4 cursor-pointer transition-colors " +
+                        (selectedQuote?.idCotizacion === q.idCotizacion
+                          ? "bg-cyan-press/5 border-l-4 border-cyan-press pl-4"
+                          : "hover:bg-ink/1")
+                      }
+                    >
+                      <div className="flex items-center gap-4 min-w-0">
+                        <span className="text-[10px] font-mono text-ink/40 w-16 shrink-0">
+                          {q.codigo}
+                        </span>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="font-display font-bold text-sm truncate text-ink/80">
+                              {q.clienteNombre}
+                            </p>
+                            <span
+                              className={`text-[9px] px-1.5 py-0.5 rounded uppercase font-bold ${originStyle[q.origen ?? "WEB"] ?? originStyle.WEB}`}
+                            >
+                              {originLabel[q.origen ?? "WEB"] ?? q.origen ?? "WEB"}
+                            </span>
+                          </div>
+                          <p className="text-xs text-ink/50 truncate font-semibold">
+                            {q.tipoTrabajo}
                           </p>
-                          <span
-                            className={`text-[9px] px-1.5 py-0.5 rounded uppercase font-bold ${originStyle[q.origen ?? "WEB"] ?? originStyle.WEB}`}
-                          >
-                            {originLabel[q.origen ?? "WEB"] ?? q.origen ?? "WEB"}
-                          </span>
                         </div>
-                        <p className="text-xs text-ink/50 truncate font-semibold">
-                          {q.tipoTrabajo}
-                        </p>
                       </div>
-                    </div>
 
-                    <div className="flex items-center gap-6 shrink-0">
-                      <span className="text-[10px] font-mono text-ink/40">
-                        {q.fechaCompromiso
-                          ? new Date(q.fechaCompromiso).toLocaleDateString("es-PE", {
-                              day: "numeric",
-                              month: "short",
-                            })
-                          : "N/A"}
-                      </span>
-                      <span className="font-mono font-bold text-sm text-ink/80">
-                        {money(q.montoTotal)}
-                      </span>
-                      <span
-                        className={`text-[10px] px-2.5 py-1 rounded uppercase font-bold tracking-tighter w-24 text-center ${statusStyle[q.estado].classes}`}
-                      >
-                        {statusStyle[q.estado].label}
-                      </span>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+                      <div className="flex items-center gap-6 shrink-0">
+                        <span className="text-[10px] font-mono text-ink/40">
+                          {q.fechaCompromiso
+                            ? new Date(q.fechaCompromiso).toLocaleDateString("es-PE", {
+                                day: "numeric",
+                                month: "short",
+                              })
+                            : "N/A"}
+                        </span>
+                        <span className="font-mono font-bold text-sm text-ink/80">
+                          {money(q.montoTotal)}
+                        </span>
+                        <span
+                          className={`text-[10px] px-2.5 py-1 rounded uppercase font-bold tracking-tighter w-24 text-center ${statusStyle[q.estado].classes}`}
+                        >
+                          {statusStyle[q.estado].label}
+                        </span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+                <HistoryPagination
+                  page={historyPage}
+                  pageSize={historyPageSize}
+                  total={quotes.length}
+                  totalPages={totalHistoryPages}
+                  onPageChange={setHistoryPage}
+                />
+              </>
             )}
           </div>
 
@@ -544,6 +567,52 @@ export function CotizacionesPage() {
         />
       )}
     </AppShell>
+  );
+}
+
+function HistoryPagination({
+  page,
+  pageSize,
+  total,
+  totalPages,
+  onPageChange,
+}: {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
+}) {
+  const from = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const to = Math.min(page * pageSize, total);
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-ink/5 bg-ink/[0.015] px-5 py-3">
+      <p className="text-[10px] font-mono uppercase tracking-widest text-ink/40">
+        Mostrando {from}-{to} de {total}
+      </p>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          disabled={page <= 1}
+          onClick={() => onPageChange(Math.max(1, page - 1))}
+          className="inline-flex items-center gap-1 rounded border border-ink/10 bg-white px-2.5 py-1.5 text-xs font-semibold text-ink/60 transition hover:border-cyan-press/30 hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <ChevronLeft size={14} /> Anterior
+        </button>
+        <span className="rounded bg-ink/5 px-2.5 py-1.5 text-xs font-mono text-ink/55">
+          {page} / {totalPages}
+        </span>
+        <button
+          type="button"
+          disabled={page >= totalPages}
+          onClick={() => onPageChange(Math.min(totalPages, page + 1))}
+          className="inline-flex items-center gap-1 rounded border border-ink/10 bg-white px-2.5 py-1.5 text-xs font-semibold text-ink/60 transition hover:border-cyan-press/30 hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Siguiente <ChevronRight size={14} />
+        </button>
+      </div>
+    </div>
   );
 }
 

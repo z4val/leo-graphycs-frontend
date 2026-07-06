@@ -400,14 +400,6 @@ function BiPage() {
                   accent="magenta-press"
                 />
               </div>
-              <div className="mt-2 flex items-center gap-2 rounded-lg border border-ink/5 bg-ink/2 px-3 py-2 text-xs text-ink/55">
-                <Clock className="size-4 shrink-0 text-ink/40" />
-                <span>
-                  El tiempo de cotización mide de la creación a la aprobación del cliente. El
-                  detalle emisión/decisión requiere modelar <code>fecha_envio</code> y{" "}
-                  <code>fecha_respuesta</code>.
-                </span>
-              </div>
               <Interpretacion>
                 Este bloque ayuda a separar velocidad comercial y calidad operativa. Si el tiempo de
                 cotización sube, revisa aprobaciones pendientes; si los reprocesos suben, revisa

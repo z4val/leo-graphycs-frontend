@@ -134,6 +134,7 @@ export interface RegistrarSalidaRequest {
 
 export interface KardexFilters {
   idInsumo?: number | null;
+  idOrdenTrabajo?: number | null;
   fechaDesde?: string;
   fechaHasta?: string;
 }

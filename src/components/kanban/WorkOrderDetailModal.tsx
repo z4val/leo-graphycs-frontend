@@ -2,7 +2,15 @@ import type { FormEvent, ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { kanbanService } from "@/lib/api/kanban.service";
 import { pagosService, type MedioPago } from "@/lib/api/pagos.service";
-import { inventoryService, type Insumo } from "@/lib/api/inventory.service";
+import { inventoryService, type Insumo, type MovimientoInventario } from "@/lib/api/inventory.service";
+import {
+  CommandDialog,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import {
   Dialog,
 
@@ -115,7 +123,7 @@ export function WorkOrderDetailModal({ order, open, onOpenChange, onOrderUpdated
 
 
 
-        <div className="px-6 py-5 space-y-8">
+        <div className="px-6 py-5 space-y-5">
           <OperationalActions order={order} onUpdated={onOrderUpdated} />
           <OperationalFindings order={order} pendienteEntrega={pendienteEntrega} />
 
@@ -704,7 +712,7 @@ function PaymentPreviewModal({ pago, onClose }: { pago: Pago; onClose: () => voi
   const isImage = pago.comprobanteContentType?.startsWith("image/");
 
   return (
-    <div className="fixed inset-0 z-50 bg-ink/40 p-4 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-[80] bg-ink/40 p-4 backdrop-blur-sm" onClick={onClose}>
       <div
         className="mx-auto flex h-full max-w-4xl flex-col rounded-xl bg-white shadow-xl"
         onClick={(event) => event.stopPropagation()}
@@ -749,6 +757,32 @@ function PaymentPreviewModal({ pago, onClose }: { pago: Pago; onClose: () => voi
   );
 }
 
+function ActionDialog({
+  title,
+  open,
+  onClose,
+  children,
+}: {
+  title: string;
+  open: boolean;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
+      <DialogContent className="z-[70] max-w-lg border-ink/10 bg-white p-4 shadow-2xl">
+        <div className="mb-4 flex items-start justify-between gap-3 border-b border-ink/10 pb-3">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-ink/40">Acción operativa</p>
+            <h4 className="font-display text-base font-bold">{title}</h4>
+          </div>
+        </div>
+        <div className="space-y-3">{children}</div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 
 
 function OperationalFindings({ order, pendienteEntrega }: { order: WorkOrder; pendienteEntrega: number }) {
@@ -788,17 +822,31 @@ function OperationalFindings({ order, pendienteEntrega }: { order: WorkOrder; pe
 function OperationalActions({ order, onUpdated }: { order: WorkOrder; onUpdated?: (order: WorkOrder) => void }) {
   const [medios, setMedios] = useState<MedioPago[]>([]);
   const [insumos, setInsumos] = useState<Insumo[]>([]);
+  const [consumos, setConsumos] = useState<MovimientoInventario[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [activeDialog, setActiveDialog] = useState<"note" | "feedback" | "delivery" | "payment" | null>(null);
+  const [insumoSearchOpen, setInsumoSearchOpen] = useState(false);
+  const [selectedInsumo, setSelectedInsumo] = useState<Insumo | null>(null);
   const [transitionNote, setTransitionNote] = useState("");
   const [internalNote, setInternalNote] = useState("");
   const [clientMessage, setClientMessage] = useState(defaultClientMessage(order));
+  const [deliveryUnit, setDeliveryUnit] = useState<"unidades" | "millares">("unidades");
+
+  const loadConsumos = async () => {
+    const movimientos = await inventoryService.getMovimientos({ idOrdenTrabajo: Number(order.id) });
+    setConsumos(movimientos.filter((movimiento) => movimiento.tipoMovimiento === "SALIDA"));
+  };
 
   useEffect(() => {
     Promise.all([pagosService.medios(), inventoryService.getInsumos()])
       .then(([m, i]) => { setMedios(m); setInsumos(i); })
       .catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    void loadConsumos().catch(() => undefined);
+  }, [order.id]);
 
   const run = async (action: () => Promise<WorkOrder>) => {
     setBusy(true); setError("");
@@ -812,6 +860,7 @@ function OperationalActions({ order, onUpdated }: { order: WorkOrder; onUpdated?
   const textarea = "w-full min-h-16 rounded border border-ink/15 px-2 py-1.5 text-xs bg-white resize-y";
   const button = "rounded bg-ink text-paper px-3 py-2 text-xs font-semibold disabled:opacity-50";
   const secondaryButton = "rounded border border-ink/15 bg-white px-3 py-2 text-xs font-semibold text-ink/70 disabled:opacity-50";
+  const actionButton = "rounded-lg border border-ink/10 bg-white px-3 py-2 text-left text-xs font-semibold text-ink/75 shadow-sm transition hover:border-cyan-press/40 hover:bg-cyan-press/5 disabled:opacity-50";
 
   const changeState = (nuevoEstado: string, notePrefix?: string) => {
     const note = [notePrefix, transitionNote].filter(Boolean).join(" - ");
@@ -826,26 +875,63 @@ function OperationalActions({ order, onUpdated }: { order: WorkOrder; onUpdated?
     e.preventDefault(); const fd = new FormData(e.currentTarget);
     setBusy(true); setError("");
     try {
+      const monto = Number(fd.get("monto"));
+      if (!Number.isFinite(monto) || monto <= 0) {
+        throw new Error("El monto del abono debe ser mayor a cero");
+      }
+      if (monto > order.saldoPendiente) {
+        throw new Error(`El abono no puede superar el saldo pendiente (${formatSoles(order.saldoPendiente)})`);
+      }
       const file = fd.get("comprobante");
       await pagosService.registrar(
         order.id,
         Number(fd.get("medio")),
-        Number(fd.get("monto")),
+        monto,
         String(fd.get("observaciones") ?? ""),
         String(fd.get("numeroOperacion") ?? ""),
         file instanceof File && file.size > 0 ? file : null,
       );
       onUpdated?.((await kanbanService.listarOrdenes()).find(o => o.id === order.id)!);
       e.currentTarget.reset();
+      setActiveDialog(null);
     } catch (x) { setError(x instanceof Error ? x.message : "No se pudo registrar el pago"); } finally { setBusy(false); }
   };
 
   const submitConsumo = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault(); const fd = new FormData(e.currentTarget); setBusy(true); setError("");
     try {
-      await inventoryService.registrarSalida({ idInsumo: Number(fd.get("insumo")), cantidad: Number(fd.get("cantidad")), idOrdenTrabajo: Number(order.id) });
+      if (!selectedInsumo) throw new Error("Selecciona un insumo.");
+      await inventoryService.registrarSalida({
+        idInsumo: selectedInsumo.idInsumo,
+        cantidad: Number(fd.get("cantidad")),
+        idOrdenTrabajo: Number(order.id),
+        observaciones: String(fd.get("observaciones") ?? "") || undefined,
+      });
+      await loadConsumos();
       e.currentTarget.reset();
+      setSelectedInsumo(null);
     } catch (x) { setError(x instanceof Error ? x.message : "No se pudo registrar el consumo"); } finally { setBusy(false); }
+  };
+
+  const submitEntrega = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    const cantidadIngresada = Number(fd.get("cantidad"));
+    const cotizacionEnMillares = order.cotizacion.unidadMedida.toLowerCase().includes("millar");
+    const cantidad = cotizacionEnMillares
+      ? deliveryUnit === "unidades" ? cantidadIngresada / 1000 : cantidadIngresada
+      : deliveryUnit === "millares" ? cantidadIngresada * 1000 : cantidadIngresada;
+    await run(async () => {
+      const updated = await kanbanService.registrarEntrega(
+        order.id,
+        cantidad,
+        String(fd.get("observaciones") ?? "") || undefined,
+      );
+      e.currentTarget.reset();
+      setDeliveryUnit("unidades");
+      setActiveDialog(null);
+      return updated;
+    });
   };
 
   return (
@@ -861,54 +947,153 @@ function OperationalActions({ order, onUpdated }: { order: WorkOrder; onUpdated?
           ))}
         </div>
       </div>
-      <div className="grid gap-4 mt-4 lg:grid-cols-3">
-        <div className="space-y-2 rounded-lg border border-ink/5 p-3">
-          <p className="text-xs font-semibold">Preparacion y calidad</p>
-          {order.estado === "PRE_PRENSA" && order.aprobacionesDiseno.length === 0 && (
-            <button disabled={busy} className={button} onClick={() => run(() => kanbanService.registrarAprobacion(order.id, order.cliente.nombre, transitionNote || undefined))}>Registrar aprobacion de diseno</button>
-          )}
-          {order.estado === "POST_PRENSA" && (
-            <>
-              <button disabled={busy} className={button} onClick={() => run(() => kanbanService.registrarControl(order.id, "APROBADO", order.cotizacion.cantidad, transitionNote || undefined))}>Aprobar control de calidad</button>
-              <button disabled={busy} className={secondaryButton} onClick={() => run(() => kanbanService.registrarControl(order.id, "OBSERVADO", order.cotizacion.cantidad, transitionNote || "Observado en control de calidad"))}>Registrar observado</button>
-            </>
-          )}
-          {order.estado !== "PRE_PRENSA" && order.estado !== "POST_PRENSA" && <p className="text-xs text-ink/45">Sin acciones de preparacion para esta etapa.</p>}
-        </div>
-        <div className="space-y-2 rounded-lg border border-ink/5 p-3">
-          <p className="text-xs font-semibold">Observacion interna</p>
-          <textarea className={textarea} value={internalNote} onChange={(event) => setInternalNote(event.target.value)} placeholder="Nota operativa sin cambiar etapa" />
-          <button disabled={busy || !internalNote.trim()} className={button} onClick={() => run(async () => { const updated = await kanbanService.registrarObservacion(order.id, internalNote.trim()); setInternalNote(""); return updated; })}>Guardar observacion</button>
-        </div>
-        <div className="space-y-2 rounded-lg border border-ink/5 p-3">
-          <p className="text-xs font-semibold">Feedback al cliente</p>
-          <textarea className={textarea} value={clientMessage} onChange={(event) => setClientMessage(event.target.value)} placeholder="Mensaje de avance para el cliente" />
-          <button disabled={busy || !clientMessage.trim()} className={button} onClick={() => run(() => kanbanService.enviarFeedbackCliente(order.id, clientMessage.trim()))}>Enviar avance</button>
-        </div>
+      <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <button type="button" className={actionButton} onClick={() => setActiveDialog("note")}>Observación interna</button>
+        <button type="button" className={actionButton} onClick={() => setActiveDialog("feedback")}>Feedback al cliente</button>
+        <button type="button" className={actionButton} onClick={() => setActiveDialog("delivery")}>Entrega parcial</button>
+        <button type="button" className={actionButton} onClick={() => setActiveDialog("payment")}>Registrar pago</button>
       </div>
-      <div className="grid lg:grid-cols-3 gap-4 mt-4">
-        <form className="space-y-2 rounded-lg border border-ink/5 p-3" onSubmit={e => { e.preventDefault(); const f=new FormData(e.currentTarget); run(() => kanbanService.registrarEntrega(order.id, Number(f.get("cantidad")), String(f.get("observaciones") ?? "") || undefined)); }}>
-          <p className="text-xs font-semibold">Entrega parcial</p><input className={input} required min="0.01" step="0.01" name="cantidad" type="number" placeholder="Cantidad" />
+
+      <div className="mt-4 rounded-lg border border-ink/10 bg-white p-3">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p className="text-xs font-semibold">Insumos consumidos</p>
+            <p className="text-[10px] text-ink/45">Salidas FIFO registradas contra esta orden de trabajo.</p>
+          </div>
+          <button type="button" className={secondaryButton} onClick={() => setInsumoSearchOpen(true)}>
+            Buscar insumo
+          </button>
+        </div>
+        {selectedInsumo && (
+          <form className="mb-3 grid gap-2 rounded-lg border border-cyan-press/20 bg-cyan-press/5 p-3 sm:grid-cols-[1fr_120px_1fr_auto]" onSubmit={submitConsumo}>
+            <div className="min-w-0">
+              <p className="truncate text-xs font-bold">{selectedInsumo.nombre}</p>
+              <p className="text-[10px] text-ink/45">
+                Stock: {selectedInsumo.stockActual} {selectedInsumo.unidadMedida.toLowerCase()}
+              </p>
+            </div>
+            <input className={input} required min="0.001" step="0.001" name="cantidad" type="number" placeholder="Cantidad" />
+            <input className={input} name="observaciones" placeholder="Observaciones" />
+            <button disabled={busy} className={button}>Registrar</button>
+          </form>
+        )}
+        {consumos.length === 0 ? (
+          <Empty>Sin consumos registrados</Empty>
+        ) : (
+          <ul className="space-y-2">
+            {consumos.map((movimiento) => (
+              <li key={movimiento.idMovimiento} className="grid gap-2 rounded-lg border border-ink/5 px-3 py-2 text-xs sm:grid-cols-[1fr_auto_auto]">
+                <div className="min-w-0">
+                  <p className="truncate font-semibold">{movimiento.insumo.nombre}</p>
+                  <p className="text-[10px] text-ink/45">{movimiento.fecha}</p>
+                </div>
+                <p className="font-mono text-ink/70">
+                  {movimiento.cantidad} {movimiento.insumo.unidadMedida.toLowerCase()}
+                </p>
+                <p className="font-mono font-semibold">{formatSoles(movimiento.costoTotal)}</p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <ActionDialog title="Observación interna" open={activeDialog === "note"} onClose={() => setActiveDialog(null)}>
+        <textarea className={textarea} value={internalNote} onChange={(event) => setInternalNote(event.target.value)} placeholder="Nota operativa sin cambiar etapa" />
+        <button disabled={busy || !internalNote.trim()} className={button} onClick={() => run(async () => { const updated = await kanbanService.registrarObservacion(order.id, internalNote.trim()); setInternalNote(""); setActiveDialog(null); return updated; })}>Guardar observación</button>
+      </ActionDialog>
+
+      <ActionDialog title="Feedback al cliente" open={activeDialog === "feedback"} onClose={() => setActiveDialog(null)}>
+        <textarea className={textarea} value={clientMessage} onChange={(event) => setClientMessage(event.target.value)} placeholder="Mensaje de avance para el cliente" />
+        <button disabled={busy || !clientMessage.trim()} className={button} onClick={() => run(async () => { const updated = await kanbanService.enviarFeedbackCliente(order.id, clientMessage.trim()); setActiveDialog(null); return updated; })}>Enviar avance</button>
+      </ActionDialog>
+
+      <ActionDialog title="Entrega parcial" open={activeDialog === "delivery"} onClose={() => setActiveDialog(null)}>
+        <form className="space-y-3" onSubmit={submitEntrega}>
+          <div className="grid grid-cols-[1fr_140px] gap-2">
+            <input className={input} required min="0.01" step={deliveryUnit === "millares" ? "0.001" : "1"} name="cantidad" type="number" placeholder="Cantidad" />
+            <select className={input} value={deliveryUnit} onChange={(event) => setDeliveryUnit(event.target.value as "unidades" | "millares")}>
+              <option value="unidades">Unidades</option>
+              <option value="millares">Millares</option>
+            </select>
+          </div>
           <input className={input} name="observaciones" placeholder="Observaciones de entrega" />
+          <p className="text-[10px] text-ink/45">
+            La cantidad se convierte a la unidad base de la cotización: {order.cotizacion.unidadMedida.toLowerCase()}.
+          </p>
           <button disabled={busy} className={button}>Registrar entrega</button>
         </form>
-        <form className="space-y-2 rounded-lg border border-ink/5 p-3" onSubmit={submitPago}>
-          <p className="text-xs font-semibold">Registrar pago</p>
-          <select className={input} required name="medio"><option value="">Medio de pago</option>{medios.map(m => <option key={m.idMedioPago} value={m.idMedioPago}>{m.nombre}</option>)}</select>
-          <input className={input} required min="0.01" step="0.01" max={order.saldoPendiente} name="monto" type="number" placeholder="Monto" />
-          <input className={input} name="numeroOperacion" placeholder="Nro. operacion" />
-          <input className={input} name="observaciones" placeholder="Observaciones" />
-          <input className={input} name="comprobante" type="file" accept="image/png,image/jpeg,image/webp,application/pdf" />
-          <button disabled={busy} className={button}>Registrar pago</button>
-        </form>
-        <form className="space-y-2 rounded-lg border border-ink/5 p-3" onSubmit={submitConsumo}>
-          <p className="text-xs font-semibold">Consumo de insumo</p>
-          <select className={input} required name="insumo"><option value="">Insumo</option>{insumos.map(i => <option key={i.idInsumo} value={i.idInsumo}>{i.nombre} ({i.stockActual})</option>)}</select>
-          <input className={input} required min="0.001" step="0.001" name="cantidad" type="number" placeholder="Cantidad" />
-          <button disabled={busy} className={button}>Registrar consumo</button>
-        </form>
-      </div>
+      </ActionDialog>
+
+      <ActionDialog title="Registrar pago" open={activeDialog === "payment"} onClose={() => setActiveDialog(null)}>
+        {order.saldoPendiente <= 0 ? (
+          <p className="rounded-lg border border-emerald-press/25 bg-emerald-press/5 p-3 text-sm text-ink/70">
+            Esta orden ya esta saldada.
+          </p>
+        ) : (
+          <form className="space-y-3" onSubmit={submitPago}>
+            <p className="text-xs text-ink/50">
+              Registra un abono como amortizacion. Saldo pendiente: {formatSoles(order.saldoPendiente)}.
+            </p>
+            <select className={input} required name="medio"><option value="">Medio de pago</option>{medios.map(m => <option key={m.idMedioPago} value={m.idMedioPago}>{m.nombre}</option>)}</select>
+            <input className={input} required min="0.01" step="0.01" max={order.saldoPendiente} name="monto" type="number" placeholder="Monto" />
+            <input className={input} name="numeroOperacion" placeholder="Nro. operación" />
+            <input className={input} name="observaciones" placeholder="Observaciones" />
+            <input className={input} name="comprobante" type="file" accept="image/png,image/jpeg,image/webp,application/pdf" />
+            <button disabled={busy} className={button}>Registrar abono</button>
+          </form>
+        )}
+      </ActionDialog>
+
+      <InsumoSearchDialog
+        insumos={insumos}
+        open={insumoSearchOpen}
+        onOpenChange={setInsumoSearchOpen}
+        onSelect={(insumo) => {
+          setSelectedInsumo(insumo);
+          setInsumoSearchOpen(false);
+        }}
+      />
     </Section>
+  );
+}
+
+function InsumoSearchDialog({
+  insumos,
+  open,
+  onOpenChange,
+  onSelect,
+}: {
+  insumos: Insumo[];
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSelect: (insumo: Insumo) => void;
+}) {
+  return (
+    <CommandDialog open={open} onOpenChange={onOpenChange}>
+      <CommandInput placeholder="Buscar insumo por nombre, tipo, color o medida..." />
+      <CommandList>
+        <CommandEmpty>No se encontraron insumos.</CommandEmpty>
+        <CommandGroup heading="Insumos">
+          {insumos.map((insumo) => (
+            <CommandItem
+              key={insumo.idInsumo}
+              value={`${insumo.nombre} ${insumo.tipoInsumo} ${insumo.color ?? ""} ${insumo.medida ?? ""}`}
+              onSelect={() => onSelect(insumo)}
+            >
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold">{insumo.nombre}</p>
+                <p className="text-xs text-muted-foreground">
+                  {insumo.tipoInsumo} · Stock {insumo.stockActual} {insumo.unidadMedida.toLowerCase()}
+                </p>
+              </div>
+              <span className="ml-auto rounded border border-ink/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-ink/50">
+                Seleccionar
+              </span>
+            </CommandItem>
+          ))}
+        </CommandGroup>
+      </CommandList>
+    </CommandDialog>
   );
 }
 
@@ -930,12 +1115,36 @@ function getTransitionActions(estado: string) {
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
+  const isHistory = title.toLowerCase().includes("historial");
+  const isCost = title.toLowerCase().includes("costeo");
+
+  if (isCost) {
+    return (
+      <details className="rounded-lg border border-ink/10 bg-white px-3 py-2">
+        <summary className="cursor-pointer font-display text-xs font-bold uppercase tracking-widest text-ink/55">
+          {title}
+        </summary>
+        <div className="mt-3">{children}</div>
+      </details>
+    );
+  }
 
   return (
 
-    <section>
+    <section
+      className={cn(
+        isHistory
+          ? "rounded-xl border border-cyan-press/30 bg-cyan-press/5 p-4 shadow-sm"
+          : "rounded-lg border border-ink/5 bg-white/70 p-3",
+      )}
+    >
 
-      <h3 className="font-display font-bold text-xs uppercase tracking-widest text-ink/50 mb-3 border-b border-ink/5 pb-1.5">
+      <h3
+        className={cn(
+          "font-display font-bold text-xs uppercase tracking-widest mb-3 border-b pb-1.5",
+          isHistory ? "border-cyan-press/25 text-ink/75" : "border-ink/5 text-ink/50",
+        )}
+      >
 
         {title}
 
@@ -953,7 +1162,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 
 function Dl({ children }: { children: ReactNode }) {
 
-  return <dl className="grid gap-2 sm:grid-cols-2">{children}</dl>;
+  return <dl className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{children}</dl>;
 
 }
 
@@ -963,11 +1172,11 @@ function Row({ label, value }: { label: string; value: string }) {
 
   return (
 
-    <div>
+    <div className="min-w-0 rounded border border-ink/5 bg-ink/[0.015] px-2 py-1.5">
 
       <dt className="text-[10px] font-mono uppercase tracking-widest text-ink/40">{label}</dt>
 
-      <dd className="text-sm font-medium mt-0.5">{value}</dd>
+      <dd className="mt-0.5 truncate text-xs font-semibold text-ink/75" title={value}>{value}</dd>
 
     </div>
 
@@ -1099,7 +1308,7 @@ function StatBox({
 
 function Timeline({ children }: { children: ReactNode }) {
 
-  return <ol className="space-y-4 border-l-2 border-ink/10 pl-4 ml-1">{children}</ol>;
+  return <ol className="ml-1 space-y-3 border-l-2 border-cyan-press/40 pl-4">{children}</ol>;
 
 }
 
