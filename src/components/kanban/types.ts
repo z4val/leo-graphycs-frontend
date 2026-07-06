@@ -33,7 +33,7 @@ export interface ClienteResumen {
 /** Snapshot de cotización al convertirse en orden (tabla cotizacion + relaciones). */
 export interface CotizacionSnapshot {
   codigo: string;
-  origen: "PRESENCIAL" | "WEB" | "CHATWOOT";
+  origen: "PRESENCIAL" | "WEB" | "TELEGRAM" | "CHATWOOT";
   tipoImpresion: "OFFSET" | "DIGITAL";
   categoriaProducto: string;
   tipoProducto: string;
@@ -71,7 +71,7 @@ export interface CotizacionSnapshot {
   montoIgv: number;
   total: number;
   observaciones?: string;
-}
+}
 
 export interface HistorialEstado {
   estadoAnterior: OrdenTrabajoEstado | null;
@@ -210,5 +210,4 @@ export function sumEntregas(entregas: Entrega[]): number {
 
 export function sumPagos(pagos: Pago[]): number {
   return pagos.reduce((s, p) => s + p.monto, 0);
-}
-
+}

@@ -29,7 +29,8 @@ export function labelEstadoOrden(estado: string): string {
 const ORIGEN_LABELS: Record<string, string> = {
   PRESENCIAL: "Presencial",
   WEB: "Web",
-  CHATWOOT: "Instagram / Chatwoot",
+  TELEGRAM: "Telegram",
+  CHATWOOT: "Telegram",
 };
 
 export function labelOrigen(origen: string): string {

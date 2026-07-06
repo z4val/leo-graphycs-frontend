@@ -10,7 +10,7 @@
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api";
 
-export type OrigenFiltro = "TODOS" | "PRESENCIAL" | "WEB" | "CHATWOOT";
+export type OrigenFiltro = "TODOS" | "PRESENCIAL" | "WEB" | "TELEGRAM";
 export type RangoDias = 7 | 30 | 90;
 
 export interface EmbudoItem {
@@ -26,7 +26,7 @@ export interface TiempoEtapa {
 }
 
 export interface EfectividadCanal {
-  origen: "PRESENCIAL" | "WEB" | "CHATWOOT";
+  origen: "PRESENCIAL" | "WEB" | "TELEGRAM" | "CHATWOOT";
   enviadas: number;
   ganadas: number;
   efectividadPct: number;

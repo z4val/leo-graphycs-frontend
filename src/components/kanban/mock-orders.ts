@@ -119,7 +119,7 @@ const cotizacionTriptico: CotizacionSnapshot = {
 
 const cotizacionManual: CotizacionSnapshot = {
   codigo: "COT-2026-0156",
-  origen: "CHATWOOT",
+  origen: "TELEGRAM",
   tipoImpresion: "OFFSET",
   categoriaProducto: "Impresión Editorial",
   tipoProducto: "Libro",
@@ -716,5 +716,4 @@ export const mockWorkOrders: WorkOrder[] = [
       },
     ],
   }),
-];
-
+];

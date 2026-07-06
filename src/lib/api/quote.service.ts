@@ -24,7 +24,7 @@ export interface TipoProducto {
   descripcion?: string | null;
 }
 
-export type OrigenCotizacion = "PRESENCIAL" | "WEB" | "CHATWOOT";
+export type OrigenCotizacion = "PRESENCIAL" | "WEB" | "TELEGRAM" | "CHATWOOT";
 export type TipoImpresion = "OFFSET" | "DIGITAL";
 
 export interface PapelCotizacion {
@@ -202,6 +202,7 @@ export interface CreateCotizacionRequest {
   fechaCompromiso?: string;
   montoTotal?: number;
   observaciones?: string;
+  origen?: "PRESENCIAL" | "WEB";
   ajustes?: CosteoOverrides;
 }
 

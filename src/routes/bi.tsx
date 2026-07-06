@@ -17,9 +17,11 @@ import {
   Clock,
   Coins,
   Filter,
+  HelpCircle,
   Lock,
   RefreshCcw,
   TrendingUp,
+  X,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { authService } from "@/lib/api/auth.service";
@@ -88,12 +90,12 @@ const canales: { value: OrigenFiltro; label: string }[] = [
   { value: "TODOS", label: "Todos los canales" },
   { value: "PRESENCIAL", label: "Presencial" },
   { value: "WEB", label: "Web" },
-  { value: "CHATWOOT", label: "Chatwoot (Instagram)" },
+  { value: "TELEGRAM", label: "Telegram" },
 ];
 
 function BiPage() {
   const user = authService.getCurrentUser();
-  const esGerente = (user?.rol ?? "").toLowerCase().includes("gerente");
+  const esAdministrador = esRolAdministrador(user?.rol);
 
   const [dias, setDias] = useState<RangoDias>(30);
   const [origen, setOrigen] = useState<OrigenFiltro>("TODOS");
@@ -101,9 +103,10 @@ function BiPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   useEffect(() => {
-    if (!esGerente) {
+    if (!esAdministrador) {
       setLoading(false);
       return;
     }
@@ -127,9 +130,9 @@ function BiPage() {
     return () => {
       cancelled = true;
     };
-  }, [dias, origen, esGerente, reloadKey]);
+  }, [dias, origen, esAdministrador, reloadKey]);
 
-  if (!esGerente) {
+  if (!esAdministrador) {
     return (
       <AppShell title="Tablero BI">
         <div className="mx-auto mt-16 max-w-md rounded-2xl border border-ink/5 bg-white p-8 text-center">
@@ -138,8 +141,8 @@ function BiPage() {
           </div>
           <h2 className="font-display text-lg font-bold">Acceso restringido</h2>
           <p className="mt-2 text-sm text-ink/55">
-            El tablero de inteligencia de negocios es de acceso exclusivo del{" "}
-            <strong className="text-ink/75">Gerente General</strong>. Tu rol actual
+            El tablero de inteligencia de negocios es de acceso exclusivo para usuarios con rol{" "}
+            <strong className="text-ink/75">Administrador</strong>. Tu rol actual
             {user?.rol ? ` (${user.rol})` : ""} no tiene permiso para visualizarlo.
           </p>
         </div>
@@ -281,11 +284,9 @@ function BiPage() {
                 </BarChart>
               </ResponsiveContainer>
               <Interpretacion>
-                De {formatNumber(embudoEnviadas(data))} cotizaciones que salieron al cliente,{" "}
-                {formatNumber(embudoGanadas(data))} terminaron ganadas — tasa de conversión{" "}
-                <strong className="text-ink/75">{data.tasaConversionPct.toFixed(1)}%</strong>. Las
-                cotizaciones en <em>Enviada</em> son el cuello de botella accionable: requieren
-                seguimiento comercial antes de que caduquen.
+                Lee este bloque como el avance de las cotizaciones por estado. Un volumen alto en{" "}
+                <em>Enviada</em> sugiere revisar seguimiento comercial; un volumen alto en{" "}
+                <em>Borrador</em> indica trabajo pendiente antes de contactar al cliente.
               </Interpretacion>
             </Panel>
 
@@ -296,7 +297,7 @@ function BiPage() {
               <ResponsiveContainer width="100%" height={220}>
                 <BarChart
                   data={data.efectividadCanal.map((c) => ({
-                    name: c.origen === "CHATWOOT" ? "Chatwoot" : capitalize(c.origen),
+                    name: c.origen === "TELEGRAM" || c.origen === "CHATWOOT" ? "Telegram" : capitalize(c.origen),
                     Enviadas: c.enviadas,
                     Ganadas: c.ganadas,
                   }))}
@@ -316,9 +317,9 @@ function BiPage() {
                 </BarChart>
               </ResponsiveContainer>
               <Interpretacion>
-                {chatwootLine(data)} La efectividad por canal es la justificación cuantitativa de la
-                inversión en el asistente virtual: si un canal envía mucho y gana poco, se revisa su
-                precio o el traspaso al asesor.
+                Compara cuántas cotizaciones se enviaron y cuántas terminaron ganadas por canal. Si
+                un origen genera muchas enviadas pero pocas ganadas, conviene revisar la calidad del
+                contacto, el precio presentado o el traspaso al asesor.
               </Interpretacion>
             </Panel>
           </div>
@@ -365,11 +366,9 @@ function BiPage() {
                 </BarChart>
               </ResponsiveContainer>
               <Interpretacion>
-                <em>Lead time</em> total ≈{" "}
-                <strong className="text-ink/75">{formatHours(leadTimeTotal(data))}</strong> (
-                {(leadTimeTotal(data) / 24).toFixed(1)} días). Pre-prensa suele ser la etapa más
-                larga porque incluye el diseño y espera la aprobación del cliente. Se compara contra
-                el compromiso de 5 días hábiles.
+                Usa este gráfico para detectar dónde se acumula más tiempo dentro del flujo de
+                producción. La etapa con mayor promedio debe contrastarse con las órdenes abiertas
+                en Kanban y con los compromisos de entrega.
               </Interpretacion>
             </Panel>
 
@@ -410,9 +409,9 @@ function BiPage() {
                 </span>
               </div>
               <Interpretacion>
-                Cada reproceso reinicia la orden a pre-prensa y pierde el material impreso: es costo
-                oculto y retraso directo. Una tasa alta debe cruzarse con el control de calidad para
-                hallar la causa raíz.
+                Este bloque ayuda a separar velocidad comercial y calidad operativa. Si el tiempo de
+                cotización sube, revisa aprobaciones pendientes; si los reprocesos suben, revisa
+                causas de calidad antes de evaluar rentabilidad.
               </Interpretacion>
             </Panel>
           </div>
@@ -485,9 +484,9 @@ function BiPage() {
               </div>
             )}
             <Interpretacion>
-              El margen bruto confirma que cada orden cubre sus costos (motor aplica 30% sobre el
-              subtotal). Comparar <em>costo estimado</em> vs. <em>material real FIFO</em> revela si
-              el precio de venta del papel al cotizar sigue alineado al costo de los lotes.
+              Revisa cada fila como una comparación entre lo cotizado, lo estimado y lo consumido.
+              Diferencias grandes entre costo estimado y material real pueden indicar cambios de
+              precios, consumo adicional o una cotización que debe ajustarse.
             </Interpretacion>
           </Panel>
 
@@ -550,8 +549,8 @@ function BiPage() {
                 )}
               </div>
               <Interpretacion>
-                Las alertas protegen el cumplimiento de entregas: un quiebre de papel frena las
-                órdenes en prensa. El valor FIFO muestra el capital inmovilizado en insumos.
+                Usa las alertas para priorizar reposición antes de que el stock afecte producción.
+                El valor FIFO permite entender cuánto capital está inmovilizado en insumos.
               </Interpretacion>
             </Panel>
 
@@ -571,11 +570,21 @@ function BiPage() {
                 />
               </ul>
               <Interpretacion>
-                El tablero ya cubre los KPIs derivables de las tablas actuales. Estos se activarán
-                automáticamente al implementar sus módulos, sin cambiar el frontend.
+                Estos indicadores aparecen como pendientes porque dependen de datos transaccionales
+                que todavía no forman parte completa del flujo. Sirven como mapa de crecimiento del
+                BI.
               </Interpretacion>
             </Panel>
           </div>
+          <button
+            type="button"
+            onClick={() => setHelpOpen(true)}
+            className="fixed bottom-5 right-5 z-30 inline-flex size-11 items-center justify-center rounded-full bg-ink text-paper shadow-lg shadow-ink/20 transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-cyan-press/50"
+            title="Ayuda del tablero"
+          >
+            <HelpCircle className="size-5" />
+          </button>
+          {helpOpen && <BiHelpPopup onClose={() => setHelpOpen(false)} />}
         </div>
       )}
     </AppShell>
@@ -669,6 +678,66 @@ function Interpretacion({ children }: { children: React.ReactNode }) {
   );
 }
 
+function BiHelpPopup({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-40 bg-ink/20 px-4 py-6 backdrop-blur-sm">
+      <div className="ml-auto flex h-full max-w-sm flex-col rounded-xl border border-ink/10 bg-white shadow-xl">
+        <header className="flex items-start justify-between gap-4 border-b border-ink/5 p-4">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-press">
+              Ayuda BI
+            </p>
+            <h3 className="mt-1 font-display text-lg font-bold">Cómo leer el tablero</h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="grid size-8 shrink-0 place-items-center rounded border border-ink/10 text-ink/55 transition-colors hover:bg-ink/5"
+            title="Cerrar ayuda"
+          >
+            <X className="size-4" />
+          </button>
+        </header>
+        <div className="space-y-4 overflow-y-auto p-4 text-sm leading-relaxed text-ink/60">
+          <p>
+            El tablero resume datos transaccionales del sistema según el rango y canal seleccionados.
+            Si la base está vacía, los gráficos también aparecerán vacíos o en cero.
+          </p>
+          <HelpItem
+            title="Embudo comercial"
+            text="Muestra en qué estado están las cotizaciones. Sirve para detectar seguimiento pendiente, aprobaciones y oportunidades perdidas."
+          />
+          <HelpItem
+            title="Canales"
+            text="Compara el origen de las solicitudes. Web, Presencial y Telegram se interpretan por volumen enviado y cotizaciones ganadas."
+          />
+          <HelpItem
+            title="Producción"
+            text="Los tiempos por etapa se leen como una señal de carga o demora. Deben revisarse junto con el Kanban operativo."
+          />
+          <HelpItem
+            title="Rentabilidad"
+            text="Contrasta precio de venta, costo estimado y material real FIFO. Las diferencias ayudan a revisar costeo o consumo."
+          />
+          <HelpItem
+            title="Inventario"
+            text="Las alertas priorizan reposición. El valor FIFO indica capital inmovilizado en insumos disponibles."
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HelpItem({ title, text }: { title: string; text: string }) {
+  return (
+    <div className="rounded-lg border border-ink/5 bg-ink/2 px-3 py-2">
+      <p className="text-xs font-bold uppercase tracking-wider text-ink/70">{title}</p>
+      <p className="mt-1 text-xs text-ink/50">{text}</p>
+    </div>
+  );
+}
+
 function TimeStat({
   label,
   sublabel,
@@ -729,30 +798,6 @@ const accentBarClass: Record<string, string> = {
 
 /* ============================== Helpers ============================== */
 
-function embudoEnviadas(data: BiResumen) {
-  return data.embudo
-    .filter((e) => e.estado !== "BORRADOR")
-    .reduce((total, e) => total + e.cotizaciones, 0);
-}
-
-function embudoGanadas(data: BiResumen) {
-  return data.embudo
-    .filter((e) => e.estado === "APROBADA" || e.estado === "CONVERTIDA")
-    .reduce((total, e) => total + e.cotizaciones, 0);
-}
-
-function leadTimeTotal(data: BiResumen) {
-  return data.tiemposProduccion.reduce((total, t) => total + t.horasPromedio, 0);
-}
-
-function chatwootLine(data: BiResumen) {
-  const chat = data.efectividadCanal.find((c) => c.origen === "CHATWOOT");
-  if (!chat || chat.enviadas === 0) {
-    return "El canal presencial suele convertir mejor por el trato directo.";
-  }
-  return `Chatwoot (Instagram) aporta ${formatNumber(chat.ganadas)} ventas con ${chat.efectividadPct.toFixed(0)}% de efectividad — evidencia de que el bot genera leads reales.`;
-}
-
 function sum<T>(items: T[], key: keyof T) {
   return items.reduce((total, item) => total + Number(item[key] ?? 0), 0);
 }
@@ -773,4 +818,13 @@ function formatCurrency(value: number) {
 
 function formatHours(value: number) {
   return `${Number(value || 0).toFixed(1)} h`;
+}
+
+function esRolAdministrador(rol?: string | null) {
+  const normalized = (rol ?? "")
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .trim()
+    .toLowerCase();
+  return normalized === "administrador" || normalized === "admin";
 }

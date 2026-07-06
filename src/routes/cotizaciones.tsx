@@ -70,8 +70,16 @@ const statusStyle: Record<Cotizacion["estado"], { label: string; classes: string
 
 const originStyle: Record<string, string> = {
   WEB: "bg-cyan-press/15 text-cyan-press",
+  TELEGRAM: "bg-emerald-press/20 text-emerald-press",
   CHATWOOT: "bg-emerald-press/20 text-emerald-press",
   PRESENCIAL: "bg-yellow-press/20 text-ink",
+};
+
+const originLabel: Record<string, string> = {
+  WEB: "WEB",
+  PRESENCIAL: "PRESENCIAL",
+  TELEGRAM: "TELEGRAM",
+  CHATWOOT: "TELEGRAM",
 };
 
 const money = (value?: number | null) =>
@@ -481,7 +489,7 @@ export function CotizacionesPage() {
                           <span
                             className={`text-[9px] px-1.5 py-0.5 rounded uppercase font-bold ${originStyle[q.origen ?? "WEB"] ?? originStyle.WEB}`}
                           >
-                            {q.origen ?? "WEB"}
+                            {originLabel[q.origen ?? "WEB"] ?? q.origen ?? "WEB"}
                           </span>
                         </div>
                         <p className="text-xs text-ink/50 truncate font-semibold">
@@ -596,7 +604,11 @@ function QuoteDetail({
                 }
                 icon={<Calendar size={12} />}
               />
-              <Spec label="Origen" value={quote.origen ?? "WEB"} icon={<Send size={12} />} />
+              <Spec
+                label="Origen"
+                value={originLabel[quote.origen ?? "WEB"] ?? quote.origen ?? "WEB"}
+                icon={<Send size={12} />}
+              />
               <Spec label="Creador" value={quote.creadorNombre} icon={<User size={12} />} />
             </div>
 
@@ -768,6 +780,7 @@ function CreateQuoteModal({
 }) {
   const [idCliente, setIdCliente] = useState<number | null>(null);
   const [clientSearchOpen, setClientSearchOpen] = useState(false);
+  const [origenCotizacion, setOrigenCotizacion] = useState<"WEB" | "PRESENCIAL">("WEB");
   const [idTipoProducto, setIdTipoProducto] = useState("");
   const [idInsumoPapel, setIdInsumoPapel] = useState("");
   const [idTarifaColor, setIdTarifaColor] = useState("");
@@ -921,6 +934,7 @@ function CreateQuoteModal({
       const quote = await quoteService.createCotizacion({
         idCliente,
         ...payload,
+        origen: origenCotizacion,
         fechaCompromiso: fechaCompromiso || undefined,
         observaciones: observaciones || undefined,
       });
@@ -1050,6 +1064,31 @@ function CreateQuoteModal({
                       />
                     </>
                   )}
+                </section>
+
+                <section className="border border-ink/5 p-4 rounded-xl bg-ink/1">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-ink/70 mb-3">
+                    Tipo de contacto
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { value: "WEB", label: "Web" },
+                      { value: "PRESENCIAL", label: "Presencial" },
+                    ].map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setOrigenCotizacion(option.value as "WEB" | "PRESENCIAL")}
+                        className={`rounded-lg border px-3 py-2 text-xs font-bold uppercase tracking-widest transition-colors ${
+                          origenCotizacion === option.value
+                            ? "border-cyan-press bg-cyan-press/10 text-ink"
+                            : "border-ink/10 text-ink/55 hover:bg-ink/2"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
                 </section>
 
                 <section className="grid grid-cols-2 gap-3">
