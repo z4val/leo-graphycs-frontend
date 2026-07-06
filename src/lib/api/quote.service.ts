@@ -56,6 +56,18 @@ export interface CatalogoCotizacion {
   parametros: Record<string, number>;
 }
 
+export interface CosteoOverrides {
+  costoPlacas?: number;
+  precioMaterialMillar?: number;
+  tarifaDepreciacionMillar?: number;
+  tarifaImpresionMillar?: number;
+  tarifaTintaMillar?: number;
+  tarifaManoObraMillar?: number;
+  porcentajeMargen?: number;
+  porcentajeIgv?: number;
+  acabados?: Array<{ idAcabado: number; precioVentaMillar: number }>;
+}
+
 export interface CosteoRequest {
   idTipoProducto: number;
   idInsumoPapel: number;
@@ -65,6 +77,7 @@ export interface CosteoRequest {
   costoDiseno: number;
   tipoImpresion: TipoImpresion;
   descripcion?: string;
+  ajustes?: CosteoOverrides;
 }
 
 export interface CosteoDesglose {
@@ -76,6 +89,33 @@ export interface CosteoDesglose {
   costoTinta: number;
   costoAcabados: number;
   costoManoObra: number;
+}
+
+export interface LineaCalculo {
+  componente: string;
+  tipo: "FIJO" | "POR_MILLAR" | "PORCENTAJE" | "RESUMEN";
+  formula: string;
+  peso: number | null;
+  cantidad: number | null;
+  monto: number;
+  editable: boolean;
+}
+
+export interface TarifasAplicadas {
+  costoDiseno: number;
+  costoPlacas: number;
+  precioMaterialMillar: number;
+  tarifaDepreciacionMillar: number;
+  tarifaImpresionMillar: number;
+  tarifaTintaMillar: number;
+  tarifaManoObraMillar: number;
+  porcentajeMargen: number;
+  porcentajeIgv: number;
+}
+
+export interface DetalleCalculo {
+  lineas: LineaCalculo[];
+  tarifas: TarifasAplicadas;
 }
 
 export interface CosteoResponse {
@@ -95,6 +135,7 @@ export interface CosteoResponse {
   montoIgv: number;
   total: number;
   desglose: CosteoDesglose;
+  detalleCalculo: DetalleCalculo;
   acabados: Array<{ idAcabado: number; nombre: string; precioVentaMillar: number }>;
 }
 
@@ -131,6 +172,7 @@ export interface Cotizacion {
   porcentajeIgv?: number | null;
   montoIgv?: number | null;
   desglose?: CosteoDesglose | null;
+  detalleCalculo?: DetalleCalculo | null;
   acabados?: Array<{ idAcabado: number; nombre: string; precioAplicadoMillar: number }>;
 }
 
@@ -160,6 +202,7 @@ export interface CreateCotizacionRequest {
   fechaCompromiso?: string;
   montoTotal?: number;
   observaciones?: string;
+  ajustes?: CosteoOverrides;
 }
 
 const storage = {
