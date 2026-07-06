@@ -8,6 +8,7 @@ const navItems = [
   { to: "/cotizaciones", label: "Cotizaciones", code: "02" },
   { to: "/inventario", label: "Inventario", code: "03" },
   { to: "/usuarios", label: "Usuarios", code: "04" },
+  { to: "/bi", label: "Tablero BI", code: "05" },
 ] as const;
 
 interface AppShellProps {
