@@ -43,8 +43,8 @@ function LoginPage() {
     <div className="min-h-screen grid lg:grid-cols-2 bg-paper text-ink">
       {/* Left: focal panel */}
       <div className="relative hidden lg:flex flex-col justify-between p-12 bg-ink text-paper overflow-hidden">
-        <div className="absolute bottom-[-15%] right-[-10%] size-[28rem] bg-cyan-press/20 blur-[120px] rounded-full" />
-        <div className="absolute top-[-15%] right-[20%] size-[24rem] bg-magenta-press/15 blur-[120px] rounded-full" />
+        <div className="absolute bottom-[-15%] right-[-10%] size-112 bg-cyan-press/20 blur-[120px] rounded-full" />
+        <div className="absolute top-[-15%] right-[20%] size-96 bg-magenta-press/15 blur-[120px] rounded-full" />
 
         <div className="relative z-10 flex items-center gap-3">
           <div className="size-9 bg-paper rounded flex items-center justify-center text-ink font-display font-bold text-xs tracking-tighter">

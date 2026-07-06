@@ -189,7 +189,7 @@ export function CotizacionesPage() {
       ) : (
         <div className="grid grid-cols-12 gap-6">
           <div className="col-span-7 bg-white border border-ink/5 rounded-xl overflow-hidden shadow-sm">
-            <div className="flex items-center justify-between px-5 py-3 border-b border-ink/5 bg-ink/[0.01]">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-ink/5 bg-ink/1">
               <h2 className="font-display font-bold text-sm uppercase tracking-widest text-ink/80">
                 Historial
               </h2>
@@ -212,7 +212,7 @@ export function CotizacionesPage() {
                       "flex items-center justify-between px-5 py-4 cursor-pointer transition-colors " +
                       (selectedQuote?.idCotizacion === q.idCotizacion
                         ? "bg-cyan-press/5 border-l-4 border-cyan-press pl-4"
-                        : "hover:bg-ink/[0.01]")
+                        : "hover:bg-ink/1")
                     }
                   >
                     <div className="flex items-center gap-4 min-w-0">
@@ -295,7 +295,7 @@ function QuoteDetail({
   onApprove: (id: number) => void;
 }) {
   return (
-    <aside className="col-span-5 bg-ink text-paper rounded-2xl p-6 relative overflow-hidden shadow-xl flex flex-col justify-between min-h-[450px]">
+    <aside className="col-span-5 bg-ink text-paper rounded-2xl p-6 relative overflow-hidden shadow-xl flex flex-col justify-between min-h-112.5">
       {quote ? (
         <div className="relative z-10 flex flex-col h-full justify-between flex-1">
           <div>
@@ -573,7 +573,7 @@ function CreateQuoteModal({
           className="p-6 overflow-y-auto grid grid-cols-12 gap-6 flex-1"
         >
           <div className="col-span-7 space-y-4">
-            <section className="border border-ink/5 p-4 rounded-xl bg-ink/[0.01]">
+            <section className="border border-ink/5 p-4 rounded-xl bg-ink/1">
               <div className="flex items-center justify-between mb-3">
                 <label className="block text-xs font-bold uppercase tracking-wider text-ink/70">
                   Cliente
@@ -644,7 +644,7 @@ function CreateQuoteModal({
                   <button
                     type="button"
                     onClick={() => setClientSearchOpen(true)}
-                    className="w-full px-3 py-2 border border-ink/10 rounded-lg text-xs text-left flex items-center justify-between hover:bg-ink/[0.02]"
+                    className="w-full px-3 py-2 border border-ink/10 rounded-lg text-xs text-left flex items-center justify-between hover:bg-ink/2"
                   >
                     <span>
                       {selectedClient
@@ -774,7 +774,7 @@ function CreateQuoteModal({
                       key={item.idAcabado}
                       type="button"
                       onClick={() => toggleAcabado(item.idAcabado)}
-                      className={`px-3 py-2 rounded-lg border text-left text-[11px] ${idAcabados.includes(item.idAcabado) ? "border-cyan-press bg-cyan-press/10 text-cyan-press" : "border-ink/10 text-ink/70 hover:bg-ink/[0.02]"}`}
+                      className={`px-3 py-2 rounded-lg border text-left text-[11px] ${idAcabados.includes(item.idAcabado) ? "border-cyan-press bg-cyan-press/10 text-cyan-press" : "border-ink/10 text-ink/70 hover:bg-ink/2"}`}
                     >
                       {item.nombre}
                     </button>
@@ -805,7 +805,7 @@ function CreateQuoteModal({
             </Field>
           </div>
 
-          <aside className="col-span-5 border border-ink/10 rounded-xl p-4 bg-ink/[0.01] flex flex-col">
+          <aside className="col-span-5 border border-ink/10 rounded-xl p-4 bg-ink/1 flex flex-col">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-display font-bold text-sm uppercase tracking-widest text-ink/80">
                 Calculo
