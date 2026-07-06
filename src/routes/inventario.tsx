@@ -2,19 +2,32 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import {
   AlertTriangle,
   Boxes,
+  ChevronDown,
+  ChevronRight,
   ClipboardList,
+  Download,
+  Paperclip,
   PackagePlus,
   Plus,
   RefreshCcw,
   Search,
   Truck,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { accentBar, accentBg15 } from "@/components/accent-classes";
+import {
+  CommandDialog,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { authService } from "@/lib/api/auth.service";
 import {
   inventoryService,
+  type AdjuntoOrdenCompra,
   type CreateInsumoRequest,
   type CreateOrdenCompraRequest,
   type CreateProveedorRequest,
@@ -37,7 +50,7 @@ export const Route = createFileRoute("/inventario")({
   },
   head: () => ({
     meta: [
-      { title: "Inventario - PREX ERP" },
+      { title: "Inventario - LEO GRAPHYC ERP" },
       { name: "description", content: "Control de insumos, compras, lotes y kardex FIFO." },
     ],
   }),
@@ -156,6 +169,10 @@ export function InventarioPage() {
   const [showProveedorForm, setShowProveedorForm] = useState(false);
   const [showCompraForm, setShowCompraForm] = useState(false);
   const [showSalidaForm, setShowSalidaForm] = useState(false);
+  const [compraARecibir, setCompraARecibir] = useState<OrdenCompra | null>(null);
+  const [recepcionAdjunto, setRecepcionAdjunto] = useState<File | null>(null);
+  const [proveedorSearchOpen, setProveedorSearchOpen] = useState(false);
+  const [insumoCompraSearchIndex, setInsumoCompraSearchIndex] = useState<number | null>(null);
   const [insumoForm, setInsumoForm] = useState<CreateInsumoRequest>(emptyInsumo);
   const [insumoErrors, setInsumoErrors] = useState<InsumoFormErrors>({});
   const [proveedorForm, setProveedorForm] = useState<CreateProveedorRequest>(emptyProveedor);
@@ -205,6 +222,13 @@ export function InventarioPage() {
         detalles: current.detalles.map((detalle) => ({
           ...detalle,
           idInsumo: detalle.idInsumo || insumoData[0]?.idInsumo || 0,
+          precioUnitario:
+            detalle.precioUnitario ||
+            getCostoUnitarioSugeridoFromData(
+              detalle.idInsumo || insumoData[0]?.idInsumo || 0,
+              insumoData,
+              loteData,
+            ),
         })),
       }));
     } catch (err) {
@@ -227,14 +251,27 @@ export function InventarioPage() {
     });
   }, [insumos, query, tipoFiltro]);
 
+  const insumosConMovimiento = useMemo(
+    () => new Set(movimientos.map((movimiento) => movimiento.insumo?.idInsumo).filter(Boolean)),
+    [movimientos],
+  );
   const lowStock = insumos.filter(
-    (insumo) => Number(insumo.stockActual) < Number(insumo.stockMinimo),
+    (insumo) =>
+      insumosConMovimiento.has(insumo.idInsumo) &&
+      Number(insumo.stockMinimo) > 0 &&
+      Number(insumo.stockActual) <= Number(insumo.stockMinimo),
   );
   const stockValue = lotes.reduce(
     (sum, lote) => sum + Number(lote.cantidadDisponible || 0) * Number(lote.costoUnitario || 0),
     0,
   );
   const pendingOrders = ordenes.filter((orden) => orden.estado === "PENDIENTE").length;
+  const selectedProveedor = proveedores.find(
+    (proveedor) => proveedor.idProveedor === compraForm.idProveedor,
+  );
+  const getCostoUnitarioSugerido = (idInsumo: number) => {
+    return getCostoUnitarioSugeridoFromData(idInsumo, insumos, lotes);
+  };
 
   const createInsumo = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -310,9 +347,14 @@ export function InventarioPage() {
     });
   };
 
-  const recibirCompra = async (id: number) => {
+  const recibirCompra = async (id: number, adjunto?: File | null) => {
     await save(async () => {
       await inventoryService.recibirOrdenCompra(id);
+      if (adjunto) {
+        await inventoryService.uploadOrdenCompraAdjunto(id, adjunto);
+      }
+      setCompraARecibir(null);
+      setRecepcionAdjunto(null);
     });
   };
 
@@ -418,6 +460,13 @@ export function InventarioPage() {
         </div>
       </div>
 
+      <div className="mb-5 rounded-xl border border-ink/5 bg-white px-4 py-3 text-xs text-ink/55">
+        <strong className="text-ink/75">Flujo recomendado:</strong> registra insumos y proveedores,
+        crea una compra pendiente, recibe la compra para generar lotes FIFO y registra salidas para
+        consumir stock. El precio comercial solo aplica a papel; tinta y solucion se valorizan por
+        compra y kardex.
+      </div>
+
       {loading ? (
         <div className="rounded-xl border border-ink/5 bg-white p-8 text-sm text-ink/50">
           Cargando inventario...
@@ -427,6 +476,7 @@ export function InventarioPage() {
           {tab === "insumos" && (
             <InsumosView
               insumos={filteredInsumos}
+              insumosConMovimiento={insumosConMovimiento}
               tipoFiltro={tipoFiltro}
               setTipoFiltro={setTipoFiltro}
               onSalida={(idInsumo) => {
@@ -450,11 +500,16 @@ export function InventarioPage() {
             <ComprasView
               ordenes={ordenes}
               onCreate={() => setShowCompraForm(true)}
-              onRecibir={(id) => void recibirCompra(id)}
+              onRecibir={(orden) => {
+                setCompraARecibir(orden);
+                setRecepcionAdjunto(null);
+              }}
               saving={saving}
             />
           )}
-          {tab === "kardex" && <KardexView movimientos={movimientos} lotes={lotes} />}
+          {tab === "kardex" && (
+            <KardexView movimientos={movimientos} lotes={lotes} insumos={insumos} />
+          )}
         </>
       )}
 
@@ -504,7 +559,7 @@ export function InventarioPage() {
                   readOnly
                   tabIndex={-1}
                   value={unidadDisplayLabels[insumoForm.unidadMedida]}
-                  className={`${fieldClass(insumoErrors.unidadMedida)} cursor-not-allowed bg-ink/[0.03] text-ink/60`}
+                  className={`${fieldClass(insumoErrors.unidadMedida)} cursor-not-allowed bg-ink/3 text-ink/60`}
                 />
               </Field>
             </div>
@@ -578,7 +633,7 @@ export function InventarioPage() {
             )}
             <div className="grid grid-cols-2 gap-3">
               {isPapelForm && (
-                <Field label="Precio venta por millar" error={insumoErrors.precioVentaMillar}>
+                <Field label="Precio comercial por millar" error={insumoErrors.precioVentaMillar}>
                   <input
                     required
                     type="number"
@@ -596,6 +651,15 @@ export function InventarioPage() {
                     className={fieldClass(insumoErrors.precioVentaMillar)}
                   />
                 </Field>
+              )}
+              {!isPapelForm && (
+                <div className="rounded-lg border border-ink/10 bg-ink/2 px-3 py-2 text-xs text-ink/55">
+                  <span className="block font-bold uppercase tracking-wider text-ink/65">
+                    Costo de compra
+                  </span>
+                  Se ingresa al crear una orden de compra. Al recibirla se genera el lote y el
+                  kardex FIFO con ese costo unitario.
+                </div>
               )}
               <Field label="Stock mínimo">
                 <input
@@ -812,122 +876,160 @@ export function InventarioPage() {
       )}
 
       {showCompraForm && (
-        <Modal title="Nueva orden de compra" onClose={() => setShowCompraForm(false)}>
+        <Modal
+          title="Nueva orden de compra"
+          onClose={() => setShowCompraForm(false)}
+          className="max-w-5xl"
+        >
           <form onSubmit={createCompra} className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Código">
-                <input
-                  value={compraForm.codigo}
-                  onKeyDown={(e) => preventInvalidCodeKey(e)}
-                  onChange={(e) => {
-                    setCompraForm({ ...compraForm, codigo: sanitizeCode(e.target.value) });
-                    clearCompraError("codigo", setCompraErrors);
-                  }}
-                  placeholder="OC-2026-001"
-                  className={fieldClass(compraErrors.codigo)}
-                />
-                {compraErrors.codigo && (
-                  <p className="mt-1 text-xs font-medium text-destructive">{compraErrors.codigo}</p>
-                )}
-              </Field>
-              <Field label="Proveedor" error={compraErrors.idProveedor}>
-                <select
-                  value={compraForm.idProveedor}
-                  onChange={(e) => {
-                    setCompraForm({ ...compraForm, idProveedor: Number(e.target.value) });
-                    clearCompraError("idProveedor", setCompraErrors);
-                  }}
-                  className={fieldClass(compraErrors.idProveedor)}
-                >
-                  {proveedores.map((proveedor) => (
-                    <option key={proveedor.idProveedor} value={proveedor.idProveedor}>
-                      {proveedor.razonSocial}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-            </div>
-            {compraForm.detalles.map((detalle, index) => (
-              <div
-                key={index}
-                className="grid grid-cols-12 gap-2 rounded-lg border border-ink/5 bg-ink/[0.02] p-2"
-              >
-                <select
-                  value={detalle.idInsumo}
-                  onChange={(e) => {
-                    updateDetalle(
-                      index,
-                      { idInsumo: Number(e.target.value) },
-                      compraForm,
-                      setCompraForm,
-                    );
-                    clearCompraError("detalles", setCompraErrors);
-                  }}
-                  className={`${fieldClass(compraErrors.detalles)} col-span-6`}
-                >
-                  {insumos.map((insumo) => (
-                    <option key={insumo.idInsumo} value={insumo.idInsumo}>
-                      {insumo.nombre}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  min="0.001"
-                  step="0.001"
-                  value={detalle.cantidad}
-                  onKeyDown={(e) => preventInvalidNumberKey(e)}
-                  onChange={(e) => {
-                    updateDetalle(
-                      index,
-                      { cantidad: Number(sanitizeDecimalInput(e.target.value)) },
-                      compraForm,
-                      setCompraForm,
-                    );
-                    clearCompraError("detalles", setCompraErrors);
-                  }}
-                  className={`${fieldClass(compraErrors.detalles)} col-span-3`}
-                />
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  min="0.01"
-                  step="0.01"
-                  value={detalle.precioUnitario}
-                  onKeyDown={(e) => preventInvalidNumberKey(e)}
-                  onChange={(e) => {
-                    updateDetalle(
-                      index,
-                      { precioUnitario: Number(sanitizeDecimalInput(e.target.value)) },
-                      compraForm,
-                      setCompraForm,
-                    );
-                    clearCompraError("detalles", setCompraErrors);
-                  }}
-                  className={`${fieldClass(compraErrors.detalles)} col-span-3`}
-                />
+              <div className="rounded-lg border border-ink/10 bg-ink/2 px-3 py-2 text-xs text-ink/55">
+                <span className="block font-bold uppercase tracking-wider text-ink/65">
+                  Codigo de compra
+                </span>
+                Se genera automaticamente al guardar la orden.
               </div>
-            ))}
+              <Field label="Proveedor" error={compraErrors.idProveedor}>
+                <button
+                  type="button"
+                  onClick={() => setProveedorSearchOpen(true)}
+                  className={`${fieldClass(compraErrors.idProveedor)} text-left`}
+                >
+                  {selectedProveedor
+                    ? `${selectedProveedor.razonSocial} - RUC ${selectedProveedor.ruc}`
+                    : "Buscar proveedor por razon social o RUC"}
+                </button>
+              </Field>
+            </div>{" "}
+            {compraForm.detalles.map((detalle, index) => {
+              const selectedInsumo = insumos.find((insumo) => insumo.idInsumo === detalle.idInsumo);
+
+              return (
+                <div
+                  key={index}
+                  className="grid grid-cols-12 gap-2 rounded-lg border border-ink/5 bg-ink/2 p-2"
+                >
+                  <label className="col-span-4 text-[10px] font-bold uppercase tracking-wider text-ink/45">
+                    Insumo
+                    <button
+                      type="button"
+                      onClick={() => setInsumoCompraSearchIndex(index)}
+                      className={`${fieldClass(compraErrors.detalles)} mt-1 text-left`}
+                    >
+                      <span className="block truncate">
+                        {selectedInsumo ? selectedInsumo.nombre : "Buscar insumo"}
+                      </span>
+                      {selectedInsumo && (
+                        <span className="mt-0.5 block truncate text-[11px] font-normal normal-case tracking-normal text-ink/45">
+                          {describeInsumo(selectedInsumo)}
+                        </span>
+                      )}
+                    </button>
+                  </label>
+                  <label className="col-span-2 text-[10px] font-bold uppercase tracking-wider text-ink/45">
+                    Cantidad
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min="1"
+                      step="1"
+                      value={detalle.cantidad}
+                      onKeyDown={(e) => preventInvalidNumberKey(e)}
+                      onChange={(e) => {
+                        updateDetalle(
+                          index,
+                          { cantidad: Number(sanitizeDecimalInput(e.target.value)) },
+                          compraForm,
+                          setCompraForm,
+                        );
+                        clearCompraError("detalles", setCompraErrors);
+                      }}
+                      className={`${fieldClass(compraErrors.detalles)} mt-1`}
+                    />
+                  </label>
+                  <label className="col-span-2 text-[10px] font-bold uppercase tracking-wider text-ink/45">
+                    Costo unitario
+                    <span className="ml-1 font-normal normal-case tracking-normal text-ink/35">
+                      editable
+                    </span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min="0"
+                      step="1"
+                      value={detalle.precioUnitario}
+                      onKeyDown={(e) => preventInvalidNumberKey(e)}
+                      onChange={(e) => {
+                        updateDetalle(
+                          index,
+                          { precioUnitario: Number(sanitizeDecimalInput(e.target.value)) },
+                          compraForm,
+                          setCompraForm,
+                        );
+                        clearCompraError("detalles", setCompraErrors);
+                      }}
+                      className={`${fieldClass(compraErrors.detalles)} mt-1`}
+                    />
+                  </label>
+                  <div className="col-span-3 text-[10px] font-bold uppercase tracking-wider text-ink/45">
+                    Subtotal
+                    <div className="mt-1 rounded-md border border-ink/10 bg-white px-3 py-2 text-right font-mono text-xs text-ink/70">
+                      {formatCurrency(
+                        Number(detalle.cantidad || 0) * Number(detalle.precioUnitario || 0),
+                      )}
+                    </div>
+                  </div>
+                  <div className="col-span-1 flex items-end justify-end pb-0.5">
+                    {compraForm.detalles.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCompraForm({
+                            ...compraForm,
+                            detalles: compraForm.detalles.filter(
+                              (_, currentIndex) => currentIndex !== index,
+                            ),
+                          });
+                          clearCompraError("detalles", setCompraErrors);
+                        }}
+                        className="rounded border border-ink/10 px-2 py-2 text-[10px] font-bold text-ink/50 hover:bg-ink hover:text-paper"
+                      >
+                        X
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}{" "}
             {compraErrors.detalles && (
               <p className="text-xs font-medium text-destructive">{compraErrors.detalles}</p>
             )}
             <button
               type="button"
               onClick={() => {
+                const insumoDisponible = insumos.find(
+                  (insumo) =>
+                    !compraForm.detalles.some((detalle) => detalle.idInsumo === insumo.idInsumo),
+                );
+                if (!insumoDisponible) return;
                 setCompraForm({
                   ...compraForm,
                   detalles: [
                     ...compraForm.detalles,
-                    { idInsumo: insumos[0]?.idInsumo || 0, cantidad: 1, precioUnitario: 0 },
+                    {
+                      idInsumo: insumoDisponible.idInsumo,
+                      cantidad: 1,
+                      precioUnitario: getCostoUnitarioSugerido(insumoDisponible.idInsumo),
+                    },
                   ],
                 });
                 clearCompraError("detalles", setCompraErrors);
               }}
-              className="text-[11px] font-bold uppercase tracking-widest text-cyan-press"
+              disabled={compraForm.detalles.length >= insumos.length}
+              className="text-[11px] font-bold uppercase tracking-widest text-cyan-press disabled:text-ink/25"
             >
-              Añadir ítem
-            </button>
+              Anadir item
+            </button>{" "}
             <Field label="Observaciones" error={compraErrors.observaciones}>
               <textarea
                 maxLength={300}
@@ -948,6 +1050,129 @@ export function InventarioPage() {
               submitLabel="Crear compra"
             />
           </form>
+          <CommandDialog open={proveedorSearchOpen} onOpenChange={setProveedorSearchOpen}>
+            <CommandInput placeholder="Buscar proveedor por razon social, RUC o correo..." />
+            <CommandList>
+              <CommandEmpty>No se encontraron proveedores.</CommandEmpty>
+              <CommandGroup heading="Proveedores">
+                {proveedores.map((proveedor) => (
+                  <CommandItem
+                    key={proveedor.idProveedor}
+                    value={`${proveedor.razonSocial} ${proveedor.ruc} ${proveedor.correo ?? ""}`}
+                    onSelect={() => {
+                      setCompraForm({ ...compraForm, idProveedor: proveedor.idProveedor });
+                      clearCompraError("idProveedor", setCompraErrors);
+                      setProveedorSearchOpen(false);
+                    }}
+                  >
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium">{proveedor.razonSocial}</span>
+                      <span className="text-xs text-ink/50">
+                        RUC {proveedor.ruc} {proveedor.correo ? `- ${proveedor.correo}` : ""}
+                      </span>
+                    </div>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </CommandDialog>
+          <CommandDialog
+            open={insumoCompraSearchIndex !== null}
+            onOpenChange={(open) => {
+              if (!open) setInsumoCompraSearchIndex(null);
+            }}
+          >
+            <CommandInput placeholder="Buscar insumo por nombre, tipo o detalle..." />
+            <CommandList>
+              <CommandEmpty>No se encontraron insumos.</CommandEmpty>
+              <CommandGroup heading="Insumos disponibles">
+                {insumoCompraSearchIndex !== null &&
+                  insumos
+                    .filter((insumo) => {
+                      const selectedInsumos = new Set(
+                        compraForm.detalles
+                          .filter((_, index) => index !== insumoCompraSearchIndex)
+                          .map((detalle) => detalle.idInsumo),
+                      );
+                      return !selectedInsumos.has(insumo.idInsumo);
+                    })
+                    .map((insumo) => (
+                      <CommandItem
+                        key={insumo.idInsumo}
+                        value={`${insumo.nombre} ${insumo.tipoInsumo} ${describeInsumo(insumo)}`}
+                        onSelect={() => {
+                          updateDetalle(
+                            insumoCompraSearchIndex,
+                            {
+                              idInsumo: insumo.idInsumo,
+                              precioUnitario: getCostoUnitarioSugerido(insumo.idInsumo),
+                            },
+                            compraForm,
+                            setCompraForm,
+                          );
+                          clearCompraError("detalles", setCompraErrors);
+                          setInsumoCompraSearchIndex(null);
+                        }}
+                      >
+                        <div className="flex flex-col">
+                          <span className="text-sm font-medium">{insumo.nombre}</span>
+                          <span className="text-xs text-ink/50">
+                            {tipoLabels[insumo.tipoInsumo]} - {describeInsumo(insumo)}
+                          </span>
+                        </div>
+                      </CommandItem>
+                    ))}
+              </CommandGroup>
+            </CommandList>
+          </CommandDialog>
+        </Modal>
+      )}
+
+      {compraARecibir && (
+        <Modal title="Confirmar recepcion de compra" onClose={() => setCompraARecibir(null)}>
+          <div className="space-y-4 text-sm">
+            <div className="rounded-lg border border-emerald-press/25 bg-emerald-press/10 p-3 text-ink/70">
+              Al confirmar, la compra {compraARecibir.codigo} pasara a recibida y se generaran lotes
+              FIFO con entradas en kardex.
+            </div>
+            <div className="grid grid-cols-2 gap-3 rounded-lg border border-ink/5 p-3">
+              <Info
+                label="Proveedor"
+                value={compraARecibir.proveedor?.razonSocial || "Sin proveedor"}
+              />
+              <Info label="Total" value={formatCurrency(compraARecibir.total)} />
+              <Info label="Items" value={`${compraARecibir.detalles?.length ?? 0}`} />
+              <Info label="Emision" value={formatDate(compraARecibir.fechaEmision)} />
+            </div>
+            <Field label="Adjunto opcional">
+              <div className="relative">
+                <Paperclip className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink/35" />
+                <input
+                  type="file"
+                  accept="image/*,.pdf"
+                  onChange={(event) => setRecepcionAdjunto(event.target.files?.[0] ?? null)}
+                  className={`${inputClass} pl-9`}
+                />
+              </div>
+            </Field>
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => void recibirCompra(compraARecibir.idOrdenCompra, recepcionAdjunto)}
+                className="flex-1 rounded bg-emerald-press px-4 py-2 text-sm font-semibold text-ink disabled:opacity-50"
+              >
+                {saving ? "Recibiendo..." : "Confirmar recepcion"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setCompraARecibir(null)}
+                className="flex-1 rounded border border-ink/10 px-4 py-2 text-sm font-semibold"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
         </Modal>
       )}
     </AppShell>
@@ -956,11 +1181,13 @@ export function InventarioPage() {
 
 function InsumosView({
   insumos,
+  insumosConMovimiento,
   tipoFiltro,
   setTipoFiltro,
   onSalida,
 }: {
   insumos: Insumo[];
+  insumosConMovimiento: Set<number>;
   tipoFiltro: "TODOS" | TipoInsumo;
   setTipoFiltro: (tipo: "TODOS" | TipoInsumo) => void;
   onSalida: (idInsumo: number) => void;
@@ -990,18 +1217,22 @@ function InsumosView({
               <th className="px-4 py-3 text-left font-medium">Tipo</th>
               <th className="px-4 py-3 text-right font-medium">Stock</th>
               <th className="px-4 py-3 text-right font-medium">Mínimo</th>
-              <th className="px-4 py-3 text-right font-medium">Precio venta</th>
+              <th className="px-4 py-3 text-right font-medium">Valor comercial</th>
               <th className="px-4 py-3 text-left font-medium">Estado</th>
               <th className="px-4 py-3 text-right font-medium">Acción</th>
             </tr>
           </thead>
           <tbody>
             {insumos.map((insumo) => {
-              const low = Number(insumo.stockActual) < Number(insumo.stockMinimo);
+              const hasMovement = insumosConMovimiento.has(insumo.idInsumo);
+              const low =
+                hasMovement &&
+                Number(insumo.stockMinimo) > 0 &&
+                Number(insumo.stockActual) <= Number(insumo.stockMinimo);
               return (
                 <tr
                   key={insumo.idInsumo}
-                  className="border-b border-ink/5 last:border-0 hover:bg-ink/[0.02]"
+                  className="border-b border-ink/5 last:border-0 hover:bg-ink/2"
                 >
                   <td className="px-4 py-3">
                     <p className="font-semibold">{insumo.nombre}</p>
@@ -1024,10 +1255,20 @@ function InsumosView({
                     {formatNumber(insumo.stockMinimo)}
                   </td>
                   <td className="px-4 py-3 text-right font-mono">
-                    {formatCurrency(insumo.precioVentaMillar || 0)}
+                    {insumo.tipoInsumo === "PAPEL" ? (
+                      formatCurrency(insumo.precioVentaMillar || 0)
+                    ) : (
+                      <span className="text-xs font-sans text-ink/35">Por compra</span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
-                    {low ? <StatusDot label="Reposición" danger /> : <StatusDot label="Óptimo" />}
+                    {!hasMovement ? (
+                      <StatusDot label="Pendiente compra" muted />
+                    ) : low ? (
+                      <StatusDot label="Reposicion" danger />
+                    ) : (
+                      <StatusDot label="Optimo" />
+                    )}
                   </td>
                   <td className="px-4 py-3 text-right">
                     <button
@@ -1110,15 +1351,60 @@ function ComprasView({
 }: {
   ordenes: OrdenCompra[];
   onCreate: () => void;
-  onRecibir: (id: number) => void;
+  onRecibir: (orden: OrdenCompra) => void;
   saving: boolean;
 }) {
+  const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
+  const [adjuntosPorOrden, setAdjuntosPorOrden] = useState<Record<number, AdjuntoOrdenCompra[]>>(
+    {},
+  );
+  const [loadingAdjuntos, setLoadingAdjuntos] = useState<Record<number, boolean>>({});
+  const [adjuntosError, setAdjuntosError] = useState<Record<number, string>>({});
+  const [previewAdjunto, setPreviewAdjunto] = useState<AdjuntoOrdenCompra | null>(null);
+
+  const toggleOrden = async (orden: OrdenCompra) => {
+    if (expandedOrderId === orden.idOrdenCompra) {
+      setExpandedOrderId(null);
+      return;
+    }
+
+    setExpandedOrderId(orden.idOrdenCompra);
+    if (adjuntosPorOrden[orden.idOrdenCompra] || loadingAdjuntos[orden.idOrdenCompra]) {
+      return;
+    }
+
+    setLoadingAdjuntos((current) => ({ ...current, [orden.idOrdenCompra]: true }));
+    setAdjuntosError((current) => {
+      const next = { ...current };
+      delete next[orden.idOrdenCompra];
+      return next;
+    });
+
+    try {
+      const adjuntos = await inventoryService.getOrdenCompraAdjuntos(orden.idOrdenCompra);
+      setAdjuntosPorOrden((current) => ({ ...current, [orden.idOrdenCompra]: adjuntos }));
+    } catch (error) {
+      setAdjuntosError((current) => ({
+        ...current,
+        [orden.idOrdenCompra]:
+          error instanceof Error ? error.message : "No se pudieron cargar los adjuntos",
+      }));
+    } finally {
+      setLoadingAdjuntos((current) => ({ ...current, [orden.idOrdenCompra]: false }));
+    }
+  };
+
   return (
     <div className="rounded-xl border border-ink/5 bg-white">
       <div className="flex items-center justify-between border-b border-ink/5 px-5 py-3">
-        <h2 className="font-display text-sm font-bold uppercase tracking-widest">
-          Órdenes de compra
-        </h2>
+        <div>
+          <h2 className="font-display text-sm font-bold uppercase tracking-widest">
+            Órdenes de compra
+          </h2>
+          <p className="mt-1 text-xs text-ink/45">
+            La compra pendiente no mueve stock; al recibirla se crean lotes y entradas de kardex.
+          </p>
+        </div>
         <button
           onClick={onCreate}
           className="inline-flex items-center gap-2 rounded bg-ink px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest text-paper"
@@ -1139,47 +1425,242 @@ function ComprasView({
           </tr>
         </thead>
         <tbody>
-          {ordenes.map((orden) => (
-            <tr key={orden.idOrdenCompra} className="border-b border-ink/5 last:border-0">
-              <td className="px-4 py-3 font-mono text-xs">{orden.codigo}</td>
-              <td className="px-4 py-3 font-semibold">
-                {orden.proveedor?.razonSocial || "Sin proveedor"}
-              </td>
-              <td className="px-4 py-3 text-ink/55">{formatDate(orden.fechaEmision)}</td>
-              <td className="px-4 py-3 text-right font-mono">{formatCurrency(orden.total)}</td>
-              <td className="px-4 py-3">
-                <span
-                  className={`rounded px-2 py-1 text-[10px] font-bold uppercase tracking-tighter ${estadoClasses[orden.estado]}`}
-                >
-                  {orden.estado}
-                </span>
-              </td>
-              <td className="px-4 py-3 text-right">
-                {orden.estado === "PENDIENTE" && (
-                  <button
-                    disabled={saving}
-                    onClick={() => onRecibir(orden.idOrdenCompra)}
-                    className="rounded border border-emerald-press px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-emerald-press disabled:opacity-50"
-                  >
-                    Recibir
-                  </button>
+          {ordenes.map((orden) => {
+            const expanded = expandedOrderId === orden.idOrdenCompra;
+            return (
+              <Fragment key={orden.idOrdenCompra}>
+                <tr className="border-b border-ink/5 last:border-0">
+                  <td className="px-4 py-3 font-mono text-xs">
+                    <button
+                      type="button"
+                      onClick={() => void toggleOrden(orden)}
+                      className="mr-2 inline-grid size-6 place-items-center rounded border border-ink/10 align-middle text-ink/45 hover:bg-ink/5"
+                      title={expanded ? "Ocultar items" : "Ver items"}
+                    >
+                      {expanded ? (
+                        <ChevronDown className="size-3.5" />
+                      ) : (
+                        <ChevronRight className="size-3.5" />
+                      )}
+                    </button>
+                    {orden.codigo}
+                  </td>
+                  <td className="px-4 py-3 font-semibold">
+                    {orden.proveedor?.razonSocial || "Sin proveedor"}
+                  </td>
+                  <td className="px-4 py-3 text-ink/55">{formatDate(orden.fechaEmision)}</td>
+                  <td className="px-4 py-3 text-right font-mono">{formatCurrency(orden.total)}</td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`rounded px-2 py-1 text-[10px] font-bold uppercase tracking-tighter ${estadoClasses[orden.estado]}`}
+                    >
+                      {orden.estado}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    {orden.estado === "PENDIENTE" && (
+                      <button
+                        disabled={saving}
+                        onClick={() => onRecibir(orden)}
+                        className="rounded border border-emerald-press px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-emerald-press disabled:opacity-50"
+                      >
+                        Recibir
+                      </button>
+                    )}
+                  </td>
+                </tr>
+                {expanded && (
+                  <tr className="border-b border-ink/5 bg-ink/2">
+                    <td colSpan={6} className="px-4 py-3">
+                      <div className="grid gap-2">
+                        {(orden.detalles ?? []).map((detalle) => (
+                          <div
+                            key={detalle.idDetalleOrdenCompra ?? detalle.idInsumo}
+                            className="grid grid-cols-12 gap-3 rounded-lg border border-ink/5 bg-white px-3 py-2 text-xs"
+                          >
+                            <span className="col-span-5 font-semibold">
+                              {detalle.insumo?.nombre || "Insumo"}
+                            </span>
+                            <span className="col-span-2 text-right font-mono">
+                              {formatNumber(detalle.cantidad)}
+                            </span>
+                            <span className="col-span-2 text-right font-mono">
+                              {formatCurrency(detalle.precioUnitario)}
+                            </span>
+                            <span className="col-span-3 text-right font-mono font-semibold">
+                              {formatCurrency(
+                                detalle.subtotal ??
+                                  Number(detalle.cantidad || 0) *
+                                    Number(detalle.precioUnitario || 0),
+                              )}
+                            </span>
+                          </div>
+                        ))}
+                        {(!orden.detalles || orden.detalles.length === 0) && (
+                          <p className="text-xs text-ink/45">Esta orden no tiene items cargados.</p>
+                        )}
+                        <OrdenCompraAdjuntos
+                          adjuntos={adjuntosPorOrden[orden.idOrdenCompra] ?? []}
+                          loading={Boolean(loadingAdjuntos[orden.idOrdenCompra])}
+                          error={adjuntosError[orden.idOrdenCompra]}
+                          onPreview={setPreviewAdjunto}
+                        />
+                      </div>
+                    </td>
+                  </tr>
                 )}
-              </td>
-            </tr>
-          ))}
+              </Fragment>
+            );
+          })}
         </tbody>
       </table>
+      {previewAdjunto && (
+        <AdjuntoPreviewModal adjunto={previewAdjunto} onClose={() => setPreviewAdjunto(null)} />
+      )}
     </div>
+  );
+}
+
+function OrdenCompraAdjuntos({
+  adjuntos,
+  loading,
+  error,
+  onPreview,
+}: {
+  adjuntos: AdjuntoOrdenCompra[];
+  loading: boolean;
+  error?: string;
+  onPreview: (adjunto: AdjuntoOrdenCompra) => void;
+}) {
+  return (
+    <div className="mt-3 border-t border-ink/5 pt-3">
+      <div className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-ink/45">
+        <Paperclip className="size-3.5" />
+        Adjuntos de recepcion
+      </div>
+      {loading && <p className="text-xs text-ink/40">Cargando adjuntos...</p>}
+      {error && <p className="text-xs font-medium text-destructive">{error}</p>}
+      {!loading && !error && adjuntos.length === 0 && (
+        <p className="text-xs text-ink/40">Sin adjuntos registrados.</p>
+      )}
+      {adjuntos.length > 0 && (
+        <div className="grid grid-cols-2 gap-2">
+          {adjuntos.map((adjunto) => {
+            const image = isImageAdjunto(adjunto);
+            const pdf = isPdfAdjunto(adjunto);
+            const canPreview = Boolean(adjunto.storageUrl && (image || pdf));
+            return (
+              <button
+                key={adjunto.idAdjunto}
+                type="button"
+                disabled={!canPreview}
+                onClick={() => canPreview && onPreview(adjunto)}
+                className="flex items-center gap-3 rounded-lg border border-ink/5 bg-white p-2 text-left disabled:cursor-default"
+              >
+                {image && adjunto.storageUrl ? (
+                  <img
+                    src={adjunto.storageUrl}
+                    alt={adjunto.nombreArchivo}
+                    className="size-14 rounded border border-ink/10 object-cover"
+                    loading="lazy"
+                  />
+                ) : (
+                  <span className="grid size-14 place-items-center rounded border border-ink/10 bg-ink/3 text-[10px] font-bold uppercase text-ink/45">
+                    {pdf ? "PDF" : "DOC"}
+                  </span>
+                )}
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-xs font-semibold text-ink">
+                    {adjunto.nombreArchivo}
+                  </span>
+                  <span className="mt-0.5 block text-[11px] text-ink/45">
+                    {adjunto.contentType} - {formatBytes(adjunto.tamanoBytes)}
+                  </span>
+                  {!adjunto.storageUrl && (
+                    <span className="mt-0.5 block text-[11px] text-ink/35">
+                      Sin URL publica para previsualizar.
+                    </span>
+                  )}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AdjuntoPreviewModal({
+  adjunto,
+  onClose,
+}: {
+  adjunto: AdjuntoOrdenCompra;
+  onClose: () => void;
+}) {
+  const image = isImageAdjunto(adjunto);
+  const pdf = isPdfAdjunto(adjunto);
+
+  return (
+    <Modal title={adjunto.nombreArchivo} onClose={onClose} className="max-w-5xl">
+      <div className="max-h-[78vh] overflow-hidden rounded-lg border border-ink/10 bg-ink/3">
+        {image && adjunto.storageUrl && (
+          <img
+            src={adjunto.storageUrl}
+            alt={adjunto.nombreArchivo}
+            className="max-h-[78vh] w-full object-contain"
+          />
+        )}
+        {pdf && adjunto.storageUrl && (
+          <iframe
+            src={adjunto.storageUrl}
+            title={adjunto.nombreArchivo}
+            className="h-[78vh] w-full bg-white"
+          />
+        )}
+      </div>
+    </Modal>
   );
 }
 
 function KardexView({
   movimientos,
   lotes,
+  insumos,
 }: {
   movimientos: MovimientoInventario[];
   lotes: Lote[];
+  insumos: Insumo[];
 }) {
+  const [idInsumo, setIdInsumo] = useState("");
+  const [fechaDesde, setFechaDesde] = useState("");
+  const [fechaHasta, setFechaHasta] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const filteredMovimientos = useMemo(() => {
+    const desde = fechaDesde ? new Date(`${fechaDesde}T00:00:00`) : null;
+    const hasta = fechaHasta ? new Date(`${fechaHasta}T23:59:59`) : null;
+    return movimientos.filter((movimiento) => {
+      const fecha = new Date(movimiento.fecha);
+      const matchesInsumo = !idInsumo || movimiento.insumo?.idInsumo === Number(idInsumo);
+      const matchesDesde = !desde || fecha >= desde;
+      const matchesHasta = !hasta || fecha <= hasta;
+      return matchesInsumo && matchesDesde && matchesHasta;
+    });
+  }, [fechaDesde, fechaHasta, idInsumo, movimientos]);
+
+  const exportar = async () => {
+    setExporting(true);
+    try {
+      await inventoryService.exportKardexXlsx({
+        idInsumo: idInsumo ? Number(idInsumo) : null,
+        fechaDesde,
+        fechaHasta,
+      });
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="grid grid-cols-12 gap-6">
       <div className="col-span-8 overflow-hidden rounded-xl border border-ink/5 bg-white">
@@ -1187,6 +1668,64 @@ function KardexView({
           <h2 className="font-display text-sm font-bold uppercase tracking-widest">
             Kardex valorizado
           </h2>
+          <div className="mt-4 grid grid-cols-4 gap-3">
+            <Field label="Insumo">
+              <select
+                value={idInsumo}
+                onChange={(event) => setIdInsumo(event.target.value)}
+                className={inputClass}
+              >
+                <option value="">Todos</option>
+                {insumos.map((insumo) => (
+                  <option key={insumo.idInsumo} value={insumo.idInsumo}>
+                    {insumo.nombre}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Desde">
+              <input
+                type="date"
+                value={fechaDesde}
+                onChange={(event) => setFechaDesde(event.target.value)}
+                className={inputClass}
+              />
+            </Field>
+            <Field label="Hasta">
+              <input
+                type="date"
+                value={fechaHasta}
+                onChange={(event) => setFechaHasta(event.target.value)}
+                className={inputClass}
+              />
+            </Field>
+            <div className="flex items-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setIdInsumo("");
+                  setFechaDesde("");
+                  setFechaHasta("");
+                }}
+                className="flex-1 rounded border border-ink/10 px-3 py-2 text-xs font-semibold text-ink/60 hover:bg-ink/5"
+              >
+                Limpiar
+              </button>
+              <button
+                type="button"
+                disabled={exporting}
+                onClick={() => void exportar()}
+                className="inline-flex items-center gap-1 rounded bg-ink px-3 py-2 text-xs font-semibold text-paper disabled:opacity-50"
+              >
+                <Download className="size-3.5" />
+                XLSX
+              </button>
+            </div>
+          </div>
+          <p className="mt-1 text-xs text-ink/45">
+            Las entradas nacen al recibir compras; las salidas consumen primero el lote disponible
+            más antiguo.
+          </p>
         </div>
         <table className="w-full text-sm">
           <thead>
@@ -1200,7 +1739,7 @@ function KardexView({
             </tr>
           </thead>
           <tbody>
-            {movimientos.slice(0, 12).map((movimiento) => (
+            {filteredMovimientos.slice(0, 50).map((movimiento) => (
               <tr key={movimiento.idMovimiento} className="border-b border-ink/5 last:border-0">
                 <td className="px-4 py-3 text-xs text-ink/55">{formatDate(movimiento.fecha)}</td>
                 <td className="px-4 py-3 font-semibold">{movimiento.insumo?.nombre || "Insumo"}</td>
@@ -1226,6 +1765,13 @@ function KardexView({
                 </td>
               </tr>
             ))}
+            {filteredMovimientos.length === 0 && (
+              <tr>
+                <td colSpan={6} className="px-4 py-8 text-center text-sm text-ink/40">
+                  No hay movimientos para los filtros seleccionados.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -1295,14 +1841,16 @@ function Modal({
   title,
   onClose,
   children,
+  className = "max-w-2xl",
 }: {
   title: string;
   onClose: () => void;
   children: React.ReactNode;
+  className?: string;
 }) {
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4">
-      <div className="w-full max-w-2xl rounded-xl bg-white p-6 shadow-xl">
+      <div className={`w-full rounded-xl bg-white p-6 shadow-xl ${className}`}>
         <div className="mb-5 flex items-center justify-between">
           <h2 className="font-display text-lg font-bold">{title}</h2>
           <button
@@ -1376,12 +1924,23 @@ function Info({ label, value }: { label: string; value: string }) {
   );
 }
 
-function StatusDot({ label, danger = false }: { label: string; danger?: boolean }) {
+function StatusDot({
+  label,
+  danger = false,
+  muted = false,
+}: {
+  label: string;
+  danger?: boolean;
+  muted?: boolean;
+}) {
+  const colorClass = muted ? "text-ink/35" : danger ? "text-destructive" : "text-emerald-press";
+  const dotClass = muted ? "bg-ink/25" : danger ? "bg-destructive" : "bg-emerald-press";
+
   return (
     <span
-      className={`inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest ${danger ? "text-destructive" : "text-emerald-press"}`}
+      className={`inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest ${colorClass}`}
     >
-      <span className={`size-1.5 rounded-full ${danger ? "bg-destructive" : "bg-emerald-press"}`} />
+      <span className={`size-1.5 rounded-full ${dotClass}`} />
       {label}
     </span>
   );
@@ -1399,6 +1958,22 @@ function updateDetalle(
       currentIndex === index ? { ...detalle, ...patch } : detalle,
     ),
   });
+}
+
+function getCostoUnitarioSugeridoFromData(idInsumo: number, insumos: Insumo[], lotes: Lote[]) {
+  const lotesDelInsumo = lotes
+    .filter((lote) => lote.insumo?.idInsumo === idInsumo && Number(lote.costoUnitario) > 0)
+    .sort((a, b) => String(b.fechaIngreso || "").localeCompare(String(a.fechaIngreso || "")));
+  if (lotesDelInsumo[0]) {
+    return Number(lotesDelInsumo[0].costoUnitario);
+  }
+
+  const insumo = insumos.find((item) => item.idInsumo === idInsumo);
+  if (insumo?.tipoInsumo === "PAPEL" && Number(insumo.precioVentaMillar) > 0) {
+    return Number(insumo.precioVentaMillar);
+  }
+
+  return 0;
 }
 
 function cleanInsumo(form: CreateInsumoRequest): CreateInsumoRequest {
@@ -1481,7 +2056,7 @@ function validateInsumoForm(form: CreateInsumoRequest, existingInsumos: Insumo[]
     }
     if (!normalizeText(form.tipoPapel)) {
       errors.tipoPapel = "Ingresa el tipo de papel.";
-    } else if (!isLettersAndSpaces(form.tipoPapel)) {
+    } else if (!isLettersAndSpaces(form.tipoPapel ? form.tipoPapel : "")) {
       errors.tipoPapel = "El tipo de papel solo debe contener letras.";
     }
     if (!isValidNumber(form.precioVentaMillar) || Number(form.precioVentaMillar) <= 0) {
@@ -1752,6 +2327,14 @@ function describeInsumo(insumo: Insumo) {
   return parts.length ? parts.join(" · ") : unidadLabels[insumo.unidadMedida];
 }
 
+function isImageAdjunto(adjunto: AdjuntoOrdenCompra) {
+  return adjunto.contentType?.startsWith("image/");
+}
+
+function isPdfAdjunto(adjunto: AdjuntoOrdenCompra) {
+  return adjunto.contentType === "application/pdf";
+}
+
 function optionalNumber(value: string) {
   return value === "" ? undefined : Number(value);
 }
@@ -1764,6 +2347,12 @@ function formatCurrency(value: number) {
   return new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" }).format(
     Number(value || 0),
   );
+}
+
+function formatBytes(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return "0 KB";
+  if (value < 1024 * 1024) return `${Math.max(1, Math.round(value / 1024))} KB`;
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function formatDate(value?: string | null) {

@@ -24,6 +24,80 @@ export interface TipoProducto {
   descripcion?: string | null;
 }
 
+export type OrigenCotizacion = "PRESENCIAL" | "WEB" | "CHATWOOT";
+export type TipoImpresion = "OFFSET" | "DIGITAL";
+
+export interface PapelCotizacion {
+  idInsumo: number;
+  nombre: string;
+  descripcion?: string | null;
+  precioVentaMillar: number;
+  stockActual: number;
+}
+
+export interface AcabadoCotizacion {
+  idAcabado: number;
+  nombre: string;
+  precioVentaMillar: number;
+}
+
+export interface TarifaColorCotizacion {
+  idTarifaColor: number;
+  numeroColores: number;
+  costoPlacas: number;
+  tarifaImpresionMillar: number;
+}
+
+export interface CatalogoCotizacion {
+  tiposProducto: TipoProducto[];
+  papeles: PapelCotizacion[];
+  acabados: AcabadoCotizacion[];
+  tarifasColor: TarifaColorCotizacion[];
+  parametros: Record<string, number>;
+}
+
+export interface CosteoRequest {
+  idTipoProducto: number;
+  idInsumoPapel: number;
+  idTarifaColor: number;
+  idAcabados: number[];
+  cantidad: number;
+  costoDiseno: number;
+  tipoImpresion: TipoImpresion;
+  descripcion?: string;
+}
+
+export interface CosteoDesglose {
+  costoDiseno: number;
+  costoPlacas: number;
+  costoMaterial: number;
+  costoDepreciacion: number;
+  costoImpresion: number;
+  costoTinta: number;
+  costoAcabados: number;
+  costoManoObra: number;
+}
+
+export interface CosteoResponse {
+  idTipoProducto: number;
+  tipoProductoNombre: string;
+  idInsumoPapel: number;
+  papelNombre: string;
+  idTarifaColor: number;
+  numeroColores: number;
+  tipoImpresion: TipoImpresion;
+  cantidad: number;
+  subtotal: number;
+  porcentajeMargen: number;
+  montoMargen: number;
+  baseImponible: number;
+  porcentajeIgv: number;
+  montoIgv: number;
+  total: number;
+  desglose: CosteoDesglose;
+  acabados: Array<{ idAcabado: number; nombre: string; precioVentaMillar: number }>;
+}
+
 export interface Cotizacion {
   idCotizacion: number;
   codigo: string;
@@ -42,6 +116,22 @@ export interface Cotizacion {
   fechaCreacion: string;
   fechaAprobacion?: string | null;
   observaciones?: string | null;
+  origen?: OrigenCotizacion;
+  idTipoProducto?: number | null;
+  tipoProductoNombre?: string | null;
+  idInsumoPapel?: number | null;
+  papelNombre?: string | null;
+  idTarifaColor?: number | null;
+  numeroColores?: number | null;
+  tipoImpresion?: TipoImpresion | null;
+  subtotal?: number | null;
+  porcentajeMargen?: number | null;
+  montoMargen?: number | null;
+  baseImponible?: number | null;
+  porcentajeIgv?: number | null;
+  montoIgv?: number | null;
+  desglose?: CosteoDesglose | null;
+  acabados?: Array<{ idAcabado: number; nombre: string; precioAplicadoMillar: number }>;
 }
 
 export interface CreateClienteRequest {
@@ -58,11 +148,17 @@ export interface CreateClienteRequest {
 
 export interface CreateCotizacionRequest {
   idCliente: number;
-  tipoTrabajo: string;
+  idTipoProducto?: number;
+  idInsumoPapel?: number;
+  idTarifaColor?: number;
+  idAcabados?: number[];
+  costoDiseno?: number;
+  tipoImpresion?: TipoImpresion;
+  tipoTrabajo?: string;
   descripcion?: string;
   cantidad: number;
   fechaCompromiso?: string;
-  montoTotal: number;
+  montoTotal?: number;
   observaciones?: string;
 }
 
@@ -97,11 +193,15 @@ export const quoteService = {
   getClientes: () => request<Cliente[]>("/clientes"),
   createCliente: (payload: CreateClienteRequest) => request<Cliente>("/clientes", "POST", payload),
 
+  getCatalogoCotizacion: () => request<CatalogoCotizacion>("/catalogo/cotizacion"),
+  calcularCotizacion: (payload: CosteoRequest) =>
+    request<CosteoResponse>("/cotizaciones/calcular", "POST", payload),
+
   getCotizaciones: () => request<Cotizacion[]>("/cotizaciones"),
+  getCotizacionDetalle: (id: number) => request<Cotizacion>(`/cotizaciones/${id}`),
   createCotizacion: (payload: CreateCotizacionRequest) =>
     request<Cotizacion>("/cotizaciones", "POST", payload),
   updateCotizacionEstado: (id: number, estado: string) =>
     request<Cotizacion>(`/cotizaciones/${id}/estado`, "PUT", { estado }),
-  aprobarCotizacion: (id: number) =>
-    request<Cotizacion>(`/cotizaciones/${id}/aprobar`, "POST"),
+  aprobarCotizacion: (id: number) => request<Cotizacion>(`/cotizaciones/${id}/aprobar`, "POST"),
 };

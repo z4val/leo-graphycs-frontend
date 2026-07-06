@@ -12,7 +12,7 @@ export const Route = createFileRoute("/usuarios")({
   },
   head: () => ({
     meta: [
-      { title: "Usuarios — PREX ERP" },
+      { title: "Usuarios — LEO GRAPHYC ERP" },
       { name: "description", content: "Gestión de usuarios, roles y permisos del taller." },
     ],
   }),

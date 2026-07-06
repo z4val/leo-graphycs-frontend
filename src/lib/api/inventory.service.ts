@@ -82,6 +82,16 @@ export interface MovimientoInventario {
   observaciones?: string | null;
 }
 
+export interface AdjuntoOrdenCompra {
+  idAdjunto: number;
+  nombreArchivo: string;
+  contentType: string;
+  tamanoBytes: number;
+  storageKey: string;
+  storageUrl?: string | null;
+  fechaSubida: string;
+}
+
 export interface CreateInsumoRequest {
   tipoInsumo: TipoInsumo;
   nombre: string;
@@ -120,6 +130,12 @@ export interface RegistrarSalidaRequest {
   cantidad: number;
   idOrdenTrabajo?: number | null;
   observaciones?: string;
+}
+
+export interface KardexFilters {
+  idInsumo?: number | null;
+  fechaDesde?: string;
+  fechaHasta?: string;
 }
 
 const storage = {
@@ -176,6 +192,76 @@ async function readError(response: Response) {
   }
 }
 
+async function requestBlob(
+  paths: string[],
+  params?: Record<string, string | number | null | undefined>,
+) {
+  const token = storage.getItem("token");
+  let lastError: Error | null = null;
+  const query = toQuery(params);
+
+  for (const path of paths) {
+    try {
+      const response = await fetch(`${API_BASE}${path}${query}`, {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+
+      if (response.status === 404 && paths.length > 1) {
+        lastError = new Error(`No existe el endpoint ${path}`);
+        continue;
+      }
+
+      if (!response.ok) {
+        const error = await readError(response);
+        throw new Error(error);
+      }
+
+      return response.blob();
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error("Error de red");
+      if (paths.length === 1) break;
+    }
+  }
+
+  throw lastError ?? new Error("No se pudo completar la descarga");
+}
+
+async function requestMultipart<T>(paths: string[], formData: FormData): Promise<T> {
+  const token = storage.getItem("token");
+  let lastError: Error | null = null;
+
+  for (const path of paths) {
+    try {
+      const response = await fetch(`${API_BASE}${path}`, {
+        method: "POST",
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: formData,
+      });
+
+      if (response.status === 404 && paths.length > 1) {
+        lastError = new Error(`No existe el endpoint ${path}`);
+        continue;
+      }
+
+      if (!response.ok) {
+        const error = await readError(response);
+        throw new Error(error);
+      }
+
+      return unwrap<T>(await response.json());
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error("Error de red");
+      if (paths.length === 1) break;
+    }
+  }
+
+  throw lastError ?? new Error("No se pudo completar la subida");
+}
+
 function unwrap<T>(data: unknown): T {
   if (data && typeof data === "object" && "data" in data) {
     return (data as { data: T }).data;
@@ -190,6 +276,28 @@ const paths = {
   movimientos: ["/movimientos-inventario", "/inventario/movimientos", "/inventario/kardex"],
   lotes: ["/lotes", "/inventario/lotes"],
 };
+
+function toQuery(params?: Record<string, string | number | null | undefined>) {
+  const search = new URLSearchParams();
+  Object.entries(params ?? {}).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      search.set(key, String(value));
+    }
+  });
+  const query = search.toString();
+  return query ? `?${query}` : "";
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
 
 export const inventoryService = {
   getInsumos: () => request<Insumo[]>(paths.insumos),
@@ -214,7 +322,15 @@ export const inventoryService = {
       "POST",
     ),
 
-  getMovimientos: () => request<MovimientoInventario[]>(paths.movimientos),
+  getMovimientos: (filters?: KardexFilters) =>
+    request<MovimientoInventario[]>(paths.movimientos.map((path) => `${path}${toQuery(filters)}`)),
+  exportKardexXlsx: async (filters?: KardexFilters) => {
+    const blob = await requestBlob(
+      paths.movimientos.map((path) => `${path}/export`),
+      filters,
+    );
+    downloadBlob(blob, `kardex_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  },
   registrarSalida: (payload: RegistrarSalidaRequest) =>
     request<MovimientoInventario | MovimientoInventario[]>(
       paths.movimientos.flatMap((path) => [`${path}/salida`, `${path}/salidas`]),
@@ -223,4 +339,15 @@ export const inventoryService = {
     ),
 
   getLotes: () => request<Lote[]>(paths.lotes),
+
+  uploadOrdenCompraAdjunto: (id: number, file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return requestMultipart<AdjuntoOrdenCompra>(
+      paths.ordenesCompra.map((path) => `${path}/${id}/adjuntos`),
+      formData,
+    );
+  },
+  getOrdenCompraAdjuntos: (id: number) =>
+    request<AdjuntoOrdenCompra[]>(paths.ordenesCompra.map((path) => `${path}/${id}/adjuntos`)),
 };

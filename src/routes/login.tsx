@@ -10,7 +10,7 @@ export const Route = createFileRoute("/login")({
   },
   head: () => ({
     meta: [
-      { title: "Iniciar sesión — PREX ERP" },
+      { title: "Iniciar sesión — LEO GRAPHYC ERP" },
       { name: "description", content: "Accede a tu panel de control de imprenta." },
     ],
   }),
@@ -50,7 +50,7 @@ function LoginPage() {
           <div className="size-9 bg-paper rounded flex items-center justify-center text-ink font-display font-bold text-xs tracking-tighter">
             PX
           </div>
-          <span className="font-display font-bold tracking-tight text-lg">PREX ERP</span>
+          <span className="font-display font-bold tracking-tight text-lg">LEO GRAPHYC ERP</span>
         </div>
 
         <div className="relative z-10 space-y-6 max-w-md">
