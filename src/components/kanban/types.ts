@@ -112,7 +112,9 @@ export interface Entrega {
   observaciones?: string;
 }
 
-export interface Pago {
+export interface Pago {
+  idPago?: number;
+  idMedioPago?: number;
   fecha: string;
   monto: number;
   medioPago: string;
@@ -137,9 +139,9 @@ export interface WorkOrder {
   observaciones?: string;
   numeroReprocesos: number;
   /** Etiqueta operativa en la card (diseño, placas, en máquina, QC, etc.). */
-  etiquetaEstado: string;
-  etiquetaVariant: EstadoEtiquetaVariant;
-  prioridad: OrderPriority;
+  etiquetaEstado?: string;
+  etiquetaVariant?: EstadoEtiquetaVariant;
+  prioridad?: OrderPriority;
   vencida?: boolean;
   historialEstados: HistorialEstado[];
   aprobacionesDiseno: AprobacionDiseno[];
@@ -211,4 +213,4 @@ export function sumEntregas(entregas: Entrega[]): number {
 export function sumPagos(pagos: Pago[]): number {
   return pagos.reduce((s, p) => s + p.monto, 0);
 }
-
+

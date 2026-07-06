@@ -7,7 +7,8 @@ const navItems = [
   { to: "/dashboard", label: "Tablero", code: "01" },
   { to: "/cotizaciones", label: "Cotizaciones", code: "02" },
   { to: "/inventario", label: "Inventario", code: "03" },
-  { to: "/usuarios", label: "Usuarios", code: "04" },
+  { to: "/cobros", label: "Cobros", code: "04", roles: ["Contador", "Gerente", "Administrador"] },
+  { to: "/usuarios", label: "Usuarios", code: "05" },
 ] as const;
 
 interface AppShellProps {
@@ -44,7 +45,7 @@ export function AppShell({ title, action, children }: AppShellProps) {
         </Link>
 
         <nav className="flex flex-col gap-1">
-          {navItems.map((item) => {
+          {navItems.filter(item => !("roles" in item) || (item.roles as readonly string[]).includes(user?.rol ?? "")).map((item) => {
             const active = pathname.startsWith(item.to);
             return (
               <Link
