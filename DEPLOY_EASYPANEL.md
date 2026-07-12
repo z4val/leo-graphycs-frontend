@@ -7,7 +7,7 @@ El frontend se despliega como una aplicacion Node SSR de TanStack Start.
 EasyPanel debe usar:
 
 - `Dockerfile`: `Dockerfile`
-- Puerto interno: `3000`
+- Puerto interno: el mismo valor que use `PORT` en el contenedor. Por defecto es `3000`, pero si EasyPanel inyecta `PORT=80` veras ese valor en los logs y es normal.
 - Healthcheck path: `/health`
 
 ## Variables
