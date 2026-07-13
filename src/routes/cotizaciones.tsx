@@ -345,6 +345,7 @@ export function CotizacionesPage() {
   const [loading, setLoading] = useState(true);
   const [selectedQuote, setSelectedQuote] = useState<Cotizacion | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [loadingCreateData, setLoadingCreateData] = useState(false);
   const [historyPage, setHistoryPage] = useState(1);
   const historyPageSize = 8;
 
@@ -365,15 +366,17 @@ export function CotizacionesPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [quotesData, clientsData, catalogoData] = await Promise.all([
-        quoteService.getCotizaciones(),
-        quoteService.getClientes(),
-        quoteService.getCatalogoCotizacion(),
-      ]);
+      const quotesData = await quoteService.getCotizaciones();
       setQuotes(quotesData);
-      setClients(clientsData);
-      setCatalogo(catalogoData);
       setSelectedQuote(quotesData[0] ?? null);
+      // El listado es liviano; solo la cotización seleccionada requiere el desglose completo.
+      if (quotesData[0]) {
+        try {
+          setSelectedQuote(await quoteService.getCotizacionDetalle(quotesData[0].idCotizacion));
+        } catch {
+          // Conserva el resumen si el detalle puntual no estuviera disponible.
+        }
+      }
     } catch (error) {
       toast.error(
         "Error al cargar la informacion: " +
@@ -381,6 +384,23 @@ export function CotizacionesPage() {
       );
     } finally {
       setLoading(false);
+    }
+  };
+
+  const openCreateModal = async () => {
+    setLoadingCreateData(true);
+    try {
+      const [clientsData, catalogoData] = await Promise.all([
+        clients.length ? Promise.resolve(clients) : quoteService.getClientes(),
+        catalogo ? Promise.resolve(catalogo) : quoteService.getCatalogoCotizacion(),
+      ]);
+      setClients(clientsData);
+      setCatalogo(catalogoData);
+      setShowCreateModal(true);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudieron cargar los datos para cotizar");
+    } finally {
+      setLoadingCreateData(false);
     }
   };
 
@@ -441,11 +461,11 @@ export function CotizacionesPage() {
             <RefreshCw size={16} />
           </button>
           <button
-            onClick={() => setShowCreateModal(true)}
-            disabled={!catalogo}
+            onClick={openCreateModal}
+            disabled={loadingCreateData}
             className="px-4 py-1.5 bg-ink text-paper rounded-lg text-xs font-semibold uppercase tracking-widest hover:bg-ink/90 transition-all flex items-center gap-1.5 shadow-md disabled:opacity-40"
           >
-            <Plus size={14} /> Nueva cotizacion
+            <Plus size={14} /> {loadingCreateData ? "Cargando..." : "Nueva cotizacion"}
           </button>
         </div>
       }
