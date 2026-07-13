@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { formatSoles } from "@/components/kanban/format";
 import { authService } from "@/lib/api/auth.service";
-import { pagosService, type CobrosResumen, type MedioPago } from "@/lib/api/pagos.service";
+import { pagosService, type CobroOrden, type CobrosResumen, type MedioPago } from "@/lib/api/pagos.service";
+import type { Pago } from "@/components/kanban/types";
 
 const roles = ["Contador", "Gerente", "Administrador"];
 
@@ -22,6 +23,8 @@ function CobrosPage() {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("todos");
   const [error, setError] = useState("");
+  const [page, setPage] = useState(1);
+  const pageSize = 20;
 
   const load = useCallback(() => {
     setError("");
@@ -39,7 +42,7 @@ function CobrosPage() {
     () =>
       (data?.ordenes ?? []).filter(
         (order) =>
-          `${order.cliente.nombre} ${order.codigo} ${order.cotizacion.tipoProducto}`
+          `${order.clienteNombre} ${order.codigo} ${order.tipoProducto}`
             .toLowerCase()
             .includes(query.toLowerCase()) &&
           (status === "todos" ||
@@ -47,6 +50,12 @@ function CobrosPage() {
       ),
     [data, query, status],
   );
+  const totalPages = Math.max(1, Math.ceil(orders.length / pageSize));
+  const visibleOrders = orders.slice((page - 1) * pageSize, page * pageSize);
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, totalPages));
+  }, [totalPages]);
 
   return (
     <AppShell title="Cobros">
@@ -76,12 +85,12 @@ function CobrosPage() {
               className="rounded border px-3 py-2"
               placeholder="Buscar cliente, orden o producto"
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => { setQuery(e.target.value); setPage(1); }}
             />
             <select
               className="rounded border px-3"
               value={status}
-              onChange={(e) => setStatus(e.target.value)}
+              onChange={(e) => { setStatus(e.target.value); setPage(1); }}
             >
               <option value="todos">Todos</option>
               <option value="pendientes">Pendientes</option>
@@ -90,10 +99,20 @@ function CobrosPage() {
           </div>
 
           <div className="space-y-3">
-            {orders.map((order) => (
+            {visibleOrders.map((order) => (
               <CobroRow key={order.id} order={order} medios={medios} onDone={load} onError={setError} />
             ))}
           </div>
+          {orders.length > pageSize && (
+            <div className="flex items-center justify-between gap-3 text-sm text-ink/60">
+              <span>{orders.length} órdenes encontradas</span>
+              <div className="flex gap-2">
+                <button className="rounded border px-3 py-1 disabled:opacity-40" disabled={page === 1} onClick={() => setPage((current) => current - 1)}>Anterior</button>
+                <span className="px-2 py-1">Página {page} de {totalPages}</span>
+                <button className="rounded border px-3 py-1 disabled:opacity-40" disabled={page === totalPages} onClick={() => setPage((current) => current + 1)}>Siguiente</button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </AppShell>
@@ -106,20 +125,30 @@ function CobroRow({
   onDone,
   onError,
 }: {
-  order: CobrosResumen["ordenes"][number];
+  order: CobroOrden;
   medios: MedioPago[];
   onDone: () => void;
   onError: (error: string) => void;
 }) {
-  const pagosActivos = order.pagos.filter((pago) => !pago.anulado);
-  const pagosAnulados = order.pagos.filter((pago) => pago.anulado);
+  const [open, setOpen] = useState(false);
+  const [pagos, setPagos] = useState<Pago[] | null>(null);
+  const [loadingPagos, setLoadingPagos] = useState(false);
+  const cargarPagos = async () => {
+    if (pagos) return;
+    setLoadingPagos(true);
+    try { setPagos(await pagosService.listar(order.id)); }
+    catch (error) { onError(error instanceof Error ? error.message : "No se pudieron cargar los pagos"); }
+    finally { setLoadingPagos(false); }
+  };
+  const pagosActivos = (pagos ?? []).filter((pago) => !pago.anulado);
+  const pagosAnulados = (pagos ?? []).filter((pago) => pago.anulado);
   const estaSaldada = order.saldoPendiente <= 0;
 
   return (
-    <details className="overflow-hidden rounded-xl border bg-white shadow-sm">
+    <details className="overflow-hidden rounded-xl border bg-white shadow-sm" open={open} onToggle={(event) => { const next = event.currentTarget.open; setOpen(next); if (next) void cargarPagos(); }}>
       <summary className="grid cursor-pointer list-none items-center gap-3 p-4 transition hover:bg-ink/[0.02] md:grid-cols-[1fr_auto_auto_auto]">
         <div className="min-w-0">
-          <p className="truncate font-semibold">{order.cliente.nombre}</p>
+          <p className="truncate font-semibold">{order.clienteNombre}</p>
           <p className="text-xs text-ink/50">
             {order.codigo} · {order.cotizacion.tipoProducto}
           </p>
@@ -146,7 +175,11 @@ function CobroRow({
             <p className="mb-2 text-xs font-bold uppercase tracking-widest text-ink/45">
               Sub-transacciones / amortizaciones
             </p>
-            {order.pagos.length === 0 ? (
+            {loadingPagos ? (
+              <p className="rounded-lg border border-ink/10 bg-white p-3 text-xs text-ink/45">
+                Cargando pagos...
+              </p>
+            ) : pagos?.length === 0 ? (
               <p className="rounded-lg border border-ink/10 bg-white p-3 text-xs text-ink/45">
                 Esta orden aun no registra abonos.
               </p>
@@ -208,7 +241,7 @@ function CobroRow({
                   medios={medios}
                   maxAmount={order.saldoPendiente}
                   submitLabel="Registrar abono"
-                  onDone={onDone}
+                  onDone={() => { setPagos(null); onDone(); }}
                   onError={onError}
                 />
                 <div className="rounded-lg border border-ink/10 bg-white p-3">
@@ -221,7 +254,7 @@ function CobroRow({
                     maxAmount={order.saldoPendiente}
                     fixedAmount={order.saldoPendiente}
                     submitLabel="Pagar saldo completo"
-                    onDone={onDone}
+                    onDone={() => { setPagos(null); onDone(); }}
                     onError={onError}
                   />
                 </div>

@@ -1,9 +1,14 @@
-import type { Pago, WorkOrder } from "@/components/kanban/types";
+import type { Pago } from "@/components/kanban/types";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api";
 export interface MedioPago { idMedioPago: number; nombre: string }
 export interface CobrosResumen {
-  montoFacturado: number; totalCobrado: number; saldoPendiente: number; ordenes: WorkOrder[];
+  montoFacturado: number; totalCobrado: number; saldoPendiente: number; ordenes: CobroOrden[];
+}
+export interface CobroOrden {
+  id: string; codigo: string; clienteNombre: string; tipoProducto: string;
+  cotizacion: { tipoProducto: string };
+  montoTotal: number; totalPagado: number; saldoPendiente: number;
 }
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
@@ -25,6 +30,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 export const pagosService = {
   medios: () => request<MedioPago[]>("/medios-pago"),
   resumen: () => request<CobrosResumen>("/cobros/resumen"),
+  listar: (id: string) => request<Pago[]>(`/ordenes/${id}/pagos`),
   registrar: (
     id: string,
     idMedioPago: number,
