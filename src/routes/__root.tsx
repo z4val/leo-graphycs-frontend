@@ -77,7 +77,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "LEO GRAPHYC ERP — Gestión para Imprentas" },
+      { title: "LEO GRAPHYC — Gestión para Imprentas" },
       { name: "description", content: "ERP minimalista para imprentas: producción, inventario, cotizaciones y usuarios." },
     ],
     links: [

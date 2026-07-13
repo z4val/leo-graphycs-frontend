@@ -50,7 +50,7 @@ export const Route = createFileRoute("/inventario")({
   },
   head: () => ({
     meta: [
-      { title: "Inventario - LEO GRAPHYC ERP" },
+      { title: "Inventario - LEO GRAPHYC" },
       { name: "description", content: "Control de insumos, compras, lotes y kardex FIFO." },
     ],
   }),

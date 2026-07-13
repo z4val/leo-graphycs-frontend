@@ -52,7 +52,7 @@ export const Route = createFileRoute("/cotizaciones")({
   },
   head: () => ({
     meta: [
-      { title: "Cotizaciones - LEO GRAPHYC ERP" },
+      { title: "Cotizaciones - LEO GRAPHYC" },
       { name: "description", content: "Gestion y registro de cotizaciones a clientes." },
     ],
   }),

@@ -338,6 +338,12 @@ export const inventoryService = {
       "POST",
       payload,
     ),
+  revertirSalida: (idMovimiento: number, motivo?: string) =>
+    request<MovimientoInventario>(
+      paths.movimientos.map((path) => `${path}/${idMovimiento}/revertir`),
+      "POST",
+      { motivo },
+    ),
 
   getLotes: () => request<Lote[]>(paths.lotes),
 

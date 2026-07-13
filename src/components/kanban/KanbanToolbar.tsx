@@ -12,15 +12,17 @@ export interface KanbanFilters {
 interface KanbanToolbarProps {
   filters: KanbanFilters;
   onChange: (filters: KanbanFilters) => void;
+  view: "tablero" | "reporte";
+  onViewChange: (view: "tablero" | "reporte") => void;
 }
 
-export function KanbanToolbar({ filters, onChange }: KanbanToolbarProps) {
+export function KanbanToolbar({ filters, onChange, view, onViewChange }: KanbanToolbarProps) {
   const update = (patch: Partial<KanbanFilters>) => onChange({ ...filters, ...patch });
 
   return (
     <div className="mb-4 space-y-4 shrink-0">
       <div className="flex flex-wrap items-center gap-2">
-        <ViewToggle active="tablero" />
+        <ViewToggle active={view} onChange={onViewChange} />
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -100,11 +102,12 @@ function FilterSelect({
   );
 }
 
-function ViewToggle({ active }: { active: "tablero" | "reporte" }) {
+function ViewToggle({ active, onChange }: { active: "tablero" | "reporte"; onChange: (view: "tablero" | "reporte") => void }) {
   return (
     <div className="inline-flex rounded-lg border border-ink/10 bg-white p-0.5">
       <button
         type="button"
+        onClick={() => onChange("tablero")}
         className={
           "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors " +
           (active === "tablero" ? "bg-cyan-press/20 text-ink" : "text-ink/45 hover:text-ink")
@@ -115,6 +118,7 @@ function ViewToggle({ active }: { active: "tablero" | "reporte" }) {
       </button>
       <button
         type="button"
+        onClick={() => onChange("reporte")}
         className={
           "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors " +
           (active === "reporte" ? "bg-cyan-press/20 text-ink" : "text-ink/45 hover:text-ink")

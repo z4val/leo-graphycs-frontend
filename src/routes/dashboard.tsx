@@ -18,7 +18,7 @@ export function DashboardPage() {
   const load = useCallback(() => {
     setLoading(true); setError("");
     kanbanService.listarOrdenes()
-      .then(data => setOrders(data.filter(o => o.fase != null)))
+      .then(data => setOrders(data))
       .catch(e => setError(e instanceof Error ? e.message : "No se pudieron cargar las órdenes"))
       .finally(() => setLoading(false));
   }, []);
@@ -38,7 +38,7 @@ export function DashboardPage() {
         <KanbanBoard orders={orders}
           onOrderUpdated={updated => setOrders(current => {
             const next = current.map(o => o.id === updated.id ? updated : o);
-            return updated.fase == null ? next.filter(o => o.id !== updated.id) : next;
+            return next;
           })}
           className="h-[calc(100vh-8rem)]" />
       )}

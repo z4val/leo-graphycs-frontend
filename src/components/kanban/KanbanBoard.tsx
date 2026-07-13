@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { KanbanColumn } from "./KanbanColumn";
 import { KanbanToolbar, type KanbanFilters } from "./KanbanToolbar";
 import { KANBAN_PHASES, type WorkOrder } from "./types";
+import { DeliveredOrdersReport } from "./DeliveredOrdersReport";
 
 interface KanbanBoardProps {
   orders: WorkOrder[];
@@ -20,6 +21,7 @@ export function KanbanBoard({ orders, onOrderUpdated, className }: KanbanBoardPr
     due: "todos",
     priority: "todas",
   });
+  const [view, setView] = useState<"tablero" | "reporte">("tablero");
 
   const filteredOrders = useMemo(
     () => orders.filter((order) => matchesFilters(order, filters)),
@@ -43,7 +45,11 @@ export function KanbanBoard({ orders, onOrderUpdated, className }: KanbanBoardPr
 
   return (
     <div className={cn("flex min-h-0 flex-col", className)}>
-      <KanbanToolbar filters={filters} onChange={setFilters} />
+      <KanbanToolbar filters={filters} onChange={setFilters} view={view} onViewChange={setView} />
+
+      {view === "reporte" ? (
+        <DeliveredOrdersReport orders={filteredOrders.filter((order) => order.estado === "ENTREGADO")} onOrderUpdated={onOrderUpdated} />
+      ) : (
 
       <div
         className={cn(
@@ -61,6 +67,7 @@ export function KanbanBoard({ orders, onOrderUpdated, className }: KanbanBoardPr
           />
         ))}
       </div>
+      )}
     </div>
   );
 }

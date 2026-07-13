@@ -5,7 +5,7 @@ import { authService } from "@/lib/api/auth.service";
 export const Route = createFileRoute("/reset-password")({
   head: () => ({
     meta: [
-      { title: "Resetear contraseña — LEO GRAPHYC ERP" },
+      { title: "Resetear contraseña — LEO GRAPHYC" },
       { name: "description", content: "Recupera acceso a tu cuenta." },
     ],
   }),
@@ -49,7 +49,7 @@ function ResetPasswordPage() {
           <div className="size-9 bg-paper rounded flex items-center justify-center text-ink font-display font-bold text-xs tracking-tighter">
             PX
           </div>
-          <span className="font-display font-bold tracking-tight text-lg">LEO GRAPHYC ERP</span>
+          <span className="font-display font-bold tracking-tight text-lg">LEO GRAPHYC</span>
         </div>
 
         <div className="relative z-10 space-y-6 max-w-md">

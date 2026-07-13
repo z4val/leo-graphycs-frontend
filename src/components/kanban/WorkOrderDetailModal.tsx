@@ -54,12 +54,13 @@ interface WorkOrderDetailModalProps {
 
   onOpenChange: (open: boolean) => void;
   onOrderUpdated?: (order: WorkOrder) => void;
+  readOnly?: boolean;
 
 }
 
 
 
-export function WorkOrderDetailModal({ order, open, onOpenChange, onOrderUpdated }: WorkOrderDetailModalProps) {
+export function WorkOrderDetailModal({ order, open, onOpenChange, onOrderUpdated, readOnly = false }: WorkOrderDetailModalProps) {
   const [preview, setPreview] = useState<Pago | null>(null);
 
   if (!order) return null;
@@ -124,7 +125,7 @@ export function WorkOrderDetailModal({ order, open, onOpenChange, onOrderUpdated
 
 
         <div className="px-6 py-5 space-y-5">
-          <OperationalActions order={order} onUpdated={onOrderUpdated} />
+          {!readOnly && <OperationalActions order={order} onUpdated={onOrderUpdated} />}
           <OperationalFindings order={order} pendienteEntrega={pendienteEntrega} />
 
           <Section title="Cliente">
@@ -289,17 +290,17 @@ export function WorkOrderDetailModal({ order, open, onOpenChange, onOrderUpdated
 
             <Dl>
 
-              <Row label="Creación" value={order.fechaCreacion} />
+              <Row label="Creación" value={formatFechaHora(order.fechaCreacion)} />
 
               {order.fechaEstimadaEntrega && (
 
-                <Row label="Entrega estimada" value={order.fechaEstimadaEntrega} />
+                <Row label="Entrega estimada" value={formatFecha(order.fechaEstimadaEntrega)} />
 
               )}
 
               {order.fechaEntregaReal && (
 
-                <Row label="Entrega real" value={order.fechaEntregaReal} />
+                <Row label="Entrega real" value={formatFechaHora(order.fechaEntregaReal)} />
 
               )}
 
@@ -325,7 +326,7 @@ export function WorkOrderDetailModal({ order, open, onOpenChange, onOrderUpdated
 
                   <li key={i} className="text-sm">
 
-                    <span className="font-mono text-[10px] text-ink/40">{h.fecha}</span>
+                    <span className="font-mono text-[10px] text-ink/40">{formatFechaHora(h.fecha)}</span>
 
                     <p className="font-medium mt-0.5">
 
@@ -369,7 +370,7 @@ export function WorkOrderDetailModal({ order, open, onOpenChange, onOrderUpdated
 
                   <li key={i} className="text-sm border border-ink/5 rounded-lg p-3">
 
-                    <p className="font-medium">{a.fecha}</p>
+                    <p className="font-medium">{formatFechaHora(a.fecha)}</p>
 
                     {a.aprobadoPor && (
 
@@ -489,7 +490,7 @@ export function WorkOrderDetailModal({ order, open, onOpenChange, onOrderUpdated
 
                     <p className="text-xs text-ink/50 mt-1">
 
-                      {qc.fecha} — {qc.usuario}
+                      {formatFechaHora(qc.fecha)} — {qc.usuario}
 
                     </p>
 
@@ -551,7 +552,7 @@ export function WorkOrderDetailModal({ order, open, onOpenChange, onOrderUpdated
 
                     <p className="font-medium">
 
-                      {formatCantidad(e.cantidadEntregada, c.unidadMedida.toLowerCase())} — {e.fecha}
+                      {formatCantidad(e.cantidadEntregada, c.unidadMedida.toLowerCase())} — {formatFechaHora(e.fecha)}
 
                     </p>
 
@@ -649,7 +650,7 @@ export function WorkOrderDetailModal({ order, open, onOpenChange, onOrderUpdated
 
                     <div className="text-right text-xs text-ink/50">
 
-                      <p>{p.fecha}</p>
+                      <p>{formatFechaHora(p.fecha)}</p>
 
                       <p>{p.usuario}</p>
                       {!p.anulado && p.idPago && (
@@ -825,17 +826,32 @@ function OperationalActions({ order, onUpdated }: { order: WorkOrder; onUpdated?
   const [consumos, setConsumos] = useState<MovimientoInventario[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [activeDialog, setActiveDialog] = useState<"note" | "feedback" | "delivery" | "payment" | null>(null);
+  const [activeDialog, setActiveDialog] = useState<"note" | "feedback" | "delivery" | "payment" | "approval" | "quality" | null>(null);
   const [insumoSearchOpen, setInsumoSearchOpen] = useState(false);
   const [selectedInsumo, setSelectedInsumo] = useState<Insumo | null>(null);
+  const [unidadConsumo, setUnidadConsumo] = useState<UnidadConsumo>("LITRO");
   const [transitionNote, setTransitionNote] = useState("");
   const [internalNote, setInternalNote] = useState("");
+  const [aprobadoPor, setAprobadoPor] = useState("");
+  const [observacionAprobacion, setObservacionAprobacion] = useState("");
+  const [qualityChecks, setQualityChecks] = useState<Record<string, boolean>>({});
+  const [cantidadVerificada, setCantidadVerificada] = useState("");
+  const [observacionCalidad, setObservacionCalidad] = useState("");
   const [clientMessage, setClientMessage] = useState(defaultClientMessage(order));
+  const [feedbackAdjunto, setFeedbackAdjunto] = useState<File | null>(null);
   const [deliveryUnit, setDeliveryUnit] = useState<"unidades" | "millares">("unidades");
 
   const loadConsumos = async () => {
     const movimientos = await inventoryService.getMovimientos({ idOrdenTrabajo: Number(order.id) });
-    setConsumos(movimientos.filter((movimiento) => movimiento.tipoMovimiento === "SALIDA"));
+    const salidasRevertidas = new Set(
+      movimientos
+        .filter((movimiento) => movimiento.tipoMovimiento === "ENTRADA")
+        .map((movimiento) => idSalidaRevertida(movimiento.observaciones))
+        .filter((id): id is number => id != null),
+    );
+    setConsumos(movimientos.filter((movimiento) =>
+      movimiento.tipoMovimiento === "SALIDA" && !salidasRevertidas.has(movimiento.idMovimiento),
+    ));
   };
 
   useEffect(() => {
@@ -861,6 +877,10 @@ function OperationalActions({ order, onUpdated }: { order: WorkOrder; onUpdated?
   const button = "rounded bg-ink text-paper px-3 py-2 text-xs font-semibold disabled:opacity-50";
   const secondaryButton = "rounded border border-ink/15 bg-white px-3 py-2 text-xs font-semibold text-ink/70 disabled:opacity-50";
   const actionButton = "rounded-lg border border-ink/10 bg-white px-3 py-2 text-left text-xs font-semibold text-ink/75 shadow-sm transition hover:border-cyan-press/40 hover:bg-cyan-press/5 disabled:opacity-50";
+  const observationButton = order.estado === "PRENSA"
+    ? "rounded-lg border border-magenta-press/40 bg-magenta-press/10 px-3 py-2 text-left text-xs font-bold text-ink shadow-sm transition hover:bg-magenta-press/20 disabled:opacity-50"
+    : actionButton;
+  const todosLosControlesOk = QUALITY_CHECKS.every((check) => qualityChecks[check.id]);
 
   const changeState = (nuevoEstado: string, notePrefix?: string) => {
     const note = [notePrefix, transitionNote].filter(Boolean).join(" - ");
@@ -872,7 +892,9 @@ function OperationalActions({ order, onUpdated }: { order: WorkOrder; onUpdated?
   };
 
   const submitPago = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault(); const fd = new FormData(e.currentTarget);
+    e.preventDefault();
+    const form = e.currentTarget;
+    const fd = new FormData(form);
     setBusy(true); setError("");
     try {
       const monto = Number(fd.get("monto"));
@@ -892,30 +914,50 @@ function OperationalActions({ order, onUpdated }: { order: WorkOrder; onUpdated?
         file instanceof File && file.size > 0 ? file : null,
       );
       onUpdated?.((await kanbanService.listarOrdenes()).find(o => o.id === order.id)!);
-      e.currentTarget.reset();
+      form.reset();
       setActiveDialog(null);
     } catch (x) { setError(x instanceof Error ? x.message : "No se pudo registrar el pago"); } finally { setBusy(false); }
   };
 
   const submitConsumo = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault(); const fd = new FormData(e.currentTarget); setBusy(true); setError("");
+    e.preventDefault();
+    const form = e.currentTarget;
+    const fd = new FormData(form);
+    setBusy(true); setError("");
     try {
       if (!selectedInsumo) throw new Error("Selecciona un insumo.");
+      const cantidadIngresada = Number(fd.get("cantidad"));
+      const cantidadBase = convertirAUnidadBase(cantidadIngresada, unidadConsumo);
       await inventoryService.registrarSalida({
         idInsumo: selectedInsumo.idInsumo,
-        cantidad: Number(fd.get("cantidad")),
+        cantidad: cantidadBase,
         idOrdenTrabajo: Number(order.id),
         observaciones: String(fd.get("observaciones") ?? "") || undefined,
       });
       await loadConsumos();
-      e.currentTarget.reset();
+      form.reset();
       setSelectedInsumo(null);
     } catch (x) { setError(x instanceof Error ? x.message : "No se pudo registrar el consumo"); } finally { setBusy(false); }
   };
 
+  const retirarConsumo = async (movimiento: MovimientoInventario) => {
+    const motivo = window.prompt(`Motivo para retirar el consumo de ${movimiento.insumo.nombre}`);
+    if (motivo == null) return;
+    setBusy(true); setError("");
+    try {
+      await inventoryService.revertirSalida(movimiento.idMovimiento, motivo.trim() || undefined);
+      await loadConsumos();
+    } catch (x) {
+      setError(x instanceof Error ? x.message : "No se pudo retirar el consumo");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const submitEntrega = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const fd = new FormData(e.currentTarget);
+    const form = e.currentTarget;
+    const fd = new FormData(form);
     const cantidadIngresada = Number(fd.get("cantidad"));
     const cotizacionEnMillares = order.cotizacion.unidadMedida.toLowerCase().includes("millar");
     const cantidad = cotizacionEnMillares
@@ -927,8 +969,25 @@ function OperationalActions({ order, onUpdated }: { order: WorkOrder; onUpdated?
         cantidad,
         String(fd.get("observaciones") ?? "") || undefined,
       );
-      e.currentTarget.reset();
+      form.reset();
       setDeliveryUnit("unidades");
+      setActiveDialog(null);
+      return updated;
+    });
+  };
+
+  const registrarControlCalidad = (resultado: "APROBADO" | "OBSERVADO") => {
+    void run(async () => {
+      const pendientes = QUALITY_CHECKS.filter((check) => !qualityChecks[check.id]).map((check) => check.label);
+      const detalle = [
+        `Checklist: ${resultado === "APROBADO" ? "completo" : `pendiente ${pendientes.join(", ") || "por revisar"}`}`,
+        observacionCalidad.trim(),
+      ].filter(Boolean).join(". ");
+      const cantidad = Number(cantidadVerificada);
+      const updated = await kanbanService.registrarControl(order.id, resultado, Number.isFinite(cantidad) && cantidad > 0 ? cantidad : undefined, detalle);
+      setQualityChecks({});
+      setCantidadVerificada("");
+      setObservacionCalidad("");
       setActiveDialog(null);
       return updated;
     });
@@ -948,11 +1007,24 @@ function OperationalActions({ order, onUpdated }: { order: WorkOrder; onUpdated?
         </div>
       </div>
       <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-        <button type="button" className={actionButton} onClick={() => setActiveDialog("note")}>Observación interna</button>
+        <button type="button" className={observationButton} onClick={() => setActiveDialog("note")}>
+          {order.estado === "PRENSA" ? "Registrar observación de prensa" : "Observación interna"}
+        </button>
         <button type="button" className={actionButton} onClick={() => setActiveDialog("feedback")}>Feedback al cliente</button>
+        {order.estado === "PRE_PRENSA" && order.aprobacionesDiseno.length === 0 && (
+          <button type="button" className={actionButton} onClick={() => {
+            setAprobadoPor(order.cliente.nombre);
+            setActiveDialog("approval");
+          }}>Registrar aprobación de diseño</button>
+        )}
+        {order.estado === "POST_PRENSA" && (
+          <button type="button" className="rounded-lg border border-yellow-press/50 bg-yellow-press/20 px-3 py-2 text-left text-xs font-bold text-ink shadow-sm transition hover:bg-yellow-press/30" onClick={() => setActiveDialog("quality")}>Registrar control de calidad</button>
+        )}
         <button type="button" className={actionButton} onClick={() => setActiveDialog("delivery")}>Entrega parcial</button>
         <button type="button" className={actionButton} onClick={() => setActiveDialog("payment")}>Registrar pago</button>
       </div>
+
+      <MaterialesCotizados order={order} />
 
       <div className="mt-4 rounded-lg border border-ink/10 bg-white p-3">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -965,7 +1037,7 @@ function OperationalActions({ order, onUpdated }: { order: WorkOrder; onUpdated?
           </button>
         </div>
         {selectedInsumo && (
-          <form className="mb-3 grid gap-2 rounded-lg border border-cyan-press/20 bg-cyan-press/5 p-3 sm:grid-cols-[1fr_120px_1fr_auto]" onSubmit={submitConsumo}>
+          <form className="mb-3 grid gap-2 rounded-lg border border-cyan-press/20 bg-cyan-press/5 p-3 sm:grid-cols-[1fr_110px_130px_1fr_auto]" onSubmit={submitConsumo}>
             <div className="min-w-0">
               <p className="truncate text-xs font-bold">{selectedInsumo.nombre}</p>
               <p className="text-[10px] text-ink/45">
@@ -973,6 +1045,11 @@ function OperationalActions({ order, onUpdated }: { order: WorkOrder; onUpdated?
               </p>
             </div>
             <input className={input} required min="0.001" step="0.001" name="cantidad" type="number" placeholder="Cantidad" />
+            <select className={input} value={unidadConsumo} onChange={(event) => setUnidadConsumo(event.target.value as UnidadConsumo)}>
+              {unidadesDisponibles(selectedInsumo.unidadMedida).map((unidad) => (
+                <option key={unidad.value} value={unidad.value}>{unidad.label}</option>
+              ))}
+            </select>
             <input className={input} name="observaciones" placeholder="Observaciones" />
             <button disabled={busy} className={button}>Registrar</button>
           </form>
@@ -982,15 +1059,18 @@ function OperationalActions({ order, onUpdated }: { order: WorkOrder; onUpdated?
         ) : (
           <ul className="space-y-2">
             {consumos.map((movimiento) => (
-              <li key={movimiento.idMovimiento} className="grid gap-2 rounded-lg border border-ink/5 px-3 py-2 text-xs sm:grid-cols-[1fr_auto_auto]">
+              <li key={movimiento.idMovimiento} className="grid gap-2 rounded-lg border border-ink/5 px-3 py-2 text-xs sm:grid-cols-[1fr_auto_auto_auto]">
                 <div className="min-w-0">
                   <p className="truncate font-semibold">{movimiento.insumo.nombre}</p>
-                  <p className="text-[10px] text-ink/45">{movimiento.fecha}</p>
+                  <p className="text-[10px] text-ink/45">{formatFechaHora(movimiento.fecha)}</p>
                 </div>
                 <p className="font-mono text-ink/70">
                   {movimiento.cantidad} {movimiento.insumo.unidadMedida.toLowerCase()}
                 </p>
                 <p className="font-mono font-semibold">{formatSoles(movimiento.costoTotal)}</p>
+                <button type="button" disabled={busy} onClick={() => void retirarConsumo(movimiento)} className="text-[10px] font-bold uppercase tracking-wider text-destructive hover:underline disabled:opacity-50">
+                  Retirar
+                </button>
               </li>
             ))}
           </ul>
@@ -1002,9 +1082,51 @@ function OperationalActions({ order, onUpdated }: { order: WorkOrder; onUpdated?
         <button disabled={busy || !internalNote.trim()} className={button} onClick={() => run(async () => { const updated = await kanbanService.registrarObservacion(order.id, internalNote.trim()); setInternalNote(""); setActiveDialog(null); return updated; })}>Guardar observación</button>
       </ActionDialog>
 
+      <ActionDialog title="Aprobación de diseño" open={activeDialog === "approval"} onClose={() => setActiveDialog(null)}>
+        <p className="text-xs text-ink/55">Registra la confirmación del cliente antes de enviar la orden a prensa.</p>
+        <input className={input} value={aprobadoPor} onChange={(event) => setAprobadoPor(event.target.value)} placeholder="Aprobado por (cliente o contacto)" />
+        <textarea className={textarea} value={observacionAprobacion} onChange={(event) => setObservacionAprobacion(event.target.value)} placeholder="Observación opcional: medio, versión de diseño, fecha, etc." />
+        <button disabled={busy} className={button} onClick={() => run(async () => {
+          const updated = await kanbanService.registrarAprobacion(order.id, aprobadoPor.trim() || undefined, observacionAprobacion.trim() || undefined);
+          setAprobadoPor("");
+          setObservacionAprobacion("");
+          setActiveDialog(null);
+          return updated;
+        })}>Confirmar aprobación</button>
+      </ActionDialog>
+
+      <ActionDialog title="Control de calidad · Post-prensa" open={activeDialog === "quality"} onClose={() => setActiveDialog(null)}>
+        <p className="text-xs text-ink/55">Marca cada criterio conforme antes de entregar. Si uno queda pendiente, el control se registrará como observado.</p>
+        <div className="space-y-2 rounded-lg border border-ink/10 bg-ink/[0.02] p-3">
+          {QUALITY_CHECKS.map((check) => (
+            <label key={check.id} className="flex cursor-pointer items-center gap-2 text-xs text-ink/75">
+              <input type="checkbox" checked={Boolean(qualityChecks[check.id])} onChange={(event) => setQualityChecks((current) => ({ ...current, [check.id]: event.target.checked }))} />
+              {check.label}
+            </label>
+          ))}
+        </div>
+        <input className={input} value={cantidadVerificada} onChange={(event) => setCantidadVerificada(event.target.value)} type="number" min="0.001" step="0.001" placeholder="Cantidad verificada (opcional)" />
+        <textarea className={textarea} value={observacionCalidad} onChange={(event) => setObservacionCalidad(event.target.value)} placeholder="Observaciones: defectos, correcciones o conformidad" />
+        <div className="flex flex-wrap gap-2">
+          <button disabled={busy || !todosLosControlesOk} className={button} onClick={() => registrarControlCalidad("APROBADO")}>Listo</button>
+          <button disabled={busy} className={secondaryButton} onClick={() => registrarControlCalidad("OBSERVADO")}>Registrar como observado</button>
+        </div>
+      </ActionDialog>
+
       <ActionDialog title="Feedback al cliente" open={activeDialog === "feedback"} onClose={() => setActiveDialog(null)}>
         <textarea className={textarea} value={clientMessage} onChange={(event) => setClientMessage(event.target.value)} placeholder="Mensaje de avance para el cliente" />
-        <button disabled={busy || !clientMessage.trim()} className={button} onClick={() => run(async () => { const updated = await kanbanService.enviarFeedbackCliente(order.id, clientMessage.trim()); setActiveDialog(null); return updated; })}>Enviar avance</button>
+        <label className="block rounded border border-dashed border-ink/20 bg-ink/[0.02] p-3 text-xs text-ink/65">
+          <span className="mb-1 block font-semibold text-ink/75">Adjunto opcional para el cliente</span>
+          <span className="block text-[10px] text-ink/45">PDF, JPG, PNG o WEBP · máximo 10 MB. Útil para enviar la prueba o diseño final.</span>
+          <input className="mt-2 block w-full text-xs" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={(event) => setFeedbackAdjunto(event.target.files?.[0] ?? null)} />
+          {feedbackAdjunto && <span className="mt-2 block font-mono text-[10px] text-emerald-press">Adjunto: {feedbackAdjunto.name}</span>}
+        </label>
+        <button disabled={busy || !clientMessage.trim()} className={button} onClick={() => run(async () => {
+          const updated = await kanbanService.enviarFeedbackCliente(order.id, clientMessage.trim(), feedbackAdjunto);
+          setFeedbackAdjunto(null);
+          setActiveDialog(null);
+          return updated;
+        })}>Enviar avance{feedbackAdjunto ? " con adjunto" : ""}</button>
       </ActionDialog>
 
       <ActionDialog title="Entrega parcial" open={activeDialog === "delivery"} onClose={() => setActiveDialog(null)}>
@@ -1050,10 +1172,96 @@ function OperationalActions({ order, onUpdated }: { order: WorkOrder; onUpdated?
         onOpenChange={setInsumoSearchOpen}
         onSelect={(insumo) => {
           setSelectedInsumo(insumo);
+          setUnidadConsumo(unidadesDisponibles(insumo.unidadMedida)[0].value);
           setInsumoSearchOpen(false);
         }}
       />
     </Section>
+  );
+}
+
+type UnidadConsumo = "LITRO" | "MILILITRO" | "KILO" | "GRAMO" | "MILLAR" | "UNIDAD";
+
+const QUALITY_CHECKS = [
+  { id: "impresion", label: "Impresión sin manchas, rayas ni desalineación" },
+  { id: "color", label: "Color y registro conformes con el diseño aprobado" },
+  { id: "corte", label: "Corte, medidas y plegado correctos" },
+  { id: "acabados", label: "Acabados completos y sin defectos" },
+  { id: "cantidad", label: "Cantidad verificada conforme al pedido" },
+] as const;
+
+function unidadesDisponibles(unidadBase: Insumo["unidadMedida"]): Array<{ value: UnidadConsumo; label: string }> {
+  switch (unidadBase) {
+    case "LITRO": return [{ value: "LITRO", label: "Litros" }, { value: "MILILITRO", label: "Mililitros" }];
+    case "KILO": return [{ value: "KILO", label: "Kilogramos" }, { value: "GRAMO", label: "Gramos" }];
+    case "MILLAR": return [{ value: "MILLAR", label: "Millares" }, { value: "UNIDAD", label: "Unidades" }];
+  }
+}
+
+function convertirAUnidadBase(cantidad: number, unidad: UnidadConsumo): number {
+  return unidad === "MILILITRO" || unidad === "GRAMO" || unidad === "UNIDAD" ? cantidad / 1000 : cantidad;
+}
+
+function idSalidaRevertida(observaciones?: string | null): number | null {
+  const match = observaciones?.match(/^REVERSIÓN DE SALIDA #(\d+)/);
+  return match ? Number(match[1]) : null;
+}
+
+function formatFechaHora(fecha?: string): string {
+  if (!fecha) return "—";
+  const value = new Date(fecha);
+  if (Number.isNaN(value.getTime())) return fecha;
+  const meses = ["ene.", "feb.", "mar.", "abr.", "may.", "jun.", "jul.", "ago.", "set.", "oct.", "nov.", "dic."];
+  const hora24 = value.getHours();
+  const hora12 = hora24 % 12 || 12;
+  const periodo = hora24 < 12 ? "a. m." : "p. m.";
+  return `${value.getDate()} ${meses[value.getMonth()]} ${value.getFullYear()}, ${hora12}:${String(value.getMinutes()).padStart(2, "0")} ${periodo}`;
+}
+
+function formatFecha(fecha?: string): string {
+  if (!fecha) return "—";
+  const match = fecha.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return formatFechaHora(fecha);
+  const meses = ["ene.", "feb.", "mar.", "abr.", "may.", "jun.", "jul.", "ago.", "set.", "oct.", "nov.", "dic."];
+  return `${Number(match[3])} ${meses[Number(match[2]) - 1]} ${match[1]}`;
+}
+
+function MaterialesCotizados({ order }: { order: WorkOrder }) {
+  const { cotizacion } = order;
+  const { papel, colores } = cotizacion;
+  const materialDetalle = [
+    papel.gramaje ? `${papel.gramaje} g` : null,
+    papel.medida,
+    papel.tipoPapel,
+  ].filter(Boolean).join(" · ");
+
+  return (
+    <section className="mt-4 rounded-lg border border-yellow-press/40 bg-yellow-press/10 p-3">
+      <div className="mb-3">
+        <p className="text-xs font-semibold text-ink/80">Materiales cotizados</p>
+        <p className="text-[10px] text-ink/55">
+          Verifica esta especificación antes de registrar una salida de inventario para evitar usar un insumo distinto al cotizado.
+        </p>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="rounded-lg border border-ink/10 bg-white p-3">
+          <p className="text-[10px] font-mono font-bold uppercase tracking-widest text-ink/45">Papel / material</p>
+          <p className="mt-1 text-sm font-bold text-ink/85">{papel.nombre || "Material no especificado"}</p>
+          <p className="mt-1 text-xs text-ink/55">{materialDetalle || "Sin gramaje, medida ni tipo registrados"}</p>
+          <p className="mt-2 text-[10px] text-ink/45">
+            Cantidad cotizada: {formatCantidad(cotizacion.cantidad, cotizacion.unidadMedida.toLowerCase())}
+          </p>
+        </div>
+        <div className="rounded-lg border border-ink/10 bg-white p-3">
+          <p className="text-[10px] font-mono font-bold uppercase tracking-widest text-ink/45">Colores e impresión</p>
+          <p className="mt-1 text-sm font-bold text-ink/85">{labelColores(colores.numero)}</p>
+          <p className="mt-1 text-xs text-ink/55">{cotizacion.tipoImpresion} · Placas: {formatSoles(colores.costoPlacas)}</p>
+          <p className="mt-2 text-[10px] text-ink/45">
+            Tarifa de impresión: {formatSoles(colores.tarifaImpresionMillar)}/millar
+          </p>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -1115,6 +1323,8 @@ function getTransitionActions(estado: string) {
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
+  // El registro de operaciones de máquina aún no está habilitado; no mostrar un bloque vacío.
+  if (title.startsWith("Operaciones")) return null;
   const isHistory = title.toLowerCase().includes("historial");
   const isCost = title.toLowerCase().includes("costeo");
 

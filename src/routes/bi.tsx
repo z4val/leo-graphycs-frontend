@@ -35,7 +35,7 @@ export const Route = createFileRoute("/bi")({
   },
   head: () => ({
     meta: [
-      { title: "Tablero BI - LEO GRAPHYC ERP" },
+      { title: "Tablero BI - LEO GRAPHYC" },
       {
         name: "description",
         content:

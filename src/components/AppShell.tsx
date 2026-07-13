@@ -43,7 +43,7 @@ export function AppShell({ title, action, children }: AppShellProps) {
           <div className="size-8 bg-ink rounded flex items-center justify-center text-paper font-display font-bold text-xs tracking-tighter">
             PX
           </div>
-          <span className="font-display font-bold tracking-tight text-lg">LEO GRAPHYC ERP</span>
+          <span className="font-display font-bold tracking-tight text-lg">LEO GRAPHYC</span>
         </Link>
 
         <nav className="flex flex-col gap-1">

@@ -116,6 +116,20 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return response.json();
 }
 
+async function requestForm<T>(path: string, form: FormData): Promise<T> {
+  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    body: form,
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.error || body.message || `Error HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
 export const kanbanService = {
   listarOrdenes: async () => (await request<WorkOrder[]>("/kanban/ordenes")).map(normalizeWorkOrder),
   cambiarEstado: async (id: string, nuevoEstado: OrdenTrabajoEstado, observaciones?: string) =>
@@ -138,8 +152,10 @@ export const kanbanService = {
     normalizeWorkOrder(await request<WorkOrder>(`/kanban/ordenes/${id}/observaciones`, {
       method: "POST", body: JSON.stringify({ observaciones }),
     })),
-  enviarFeedbackCliente: async (id: string, mensaje: string) =>
-    normalizeWorkOrder(await request<WorkOrder>(`/kanban/ordenes/${id}/feedback-cliente`, {
-      method: "POST", body: JSON.stringify({ mensaje }),
-    })),
+  enviarFeedbackCliente: async (id: string, mensaje: string, adjunto?: File | null) => {
+    const form = new FormData();
+    form.append("mensaje", mensaje);
+    if (adjunto) form.append("adjunto", adjunto);
+    return normalizeWorkOrder(await requestForm<WorkOrder>(`/kanban/ordenes/${id}/feedback-cliente`, form));
+  },
 };

@@ -18,7 +18,7 @@ export const Route = createFileRoute("/clientes")({
   },
   head: () => ({
     meta: [
-      { title: "Clientes - LEO GRAPHYC ERP" },
+      { title: "Clientes - LEO GRAPHYC" },
       { name: "description", content: "Gestion comercial de clientes, cotizaciones y pedidos." },
     ],
   }),

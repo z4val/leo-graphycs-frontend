@@ -199,7 +199,7 @@ function CobroRow({
             </p>
             {estaSaldada ? (
               <div className="rounded-lg border border-emerald-press/25 bg-emerald-press/5 p-4 text-sm text-ink/70">
-                La orden principal ya aparece como pagada porque su saldo pendiente es cero.
+                La orden principal ya aparece como pagada.
               </div>
             ) : (
               <>
@@ -256,7 +256,8 @@ function PaymentForm({
       className="space-y-2 rounded-lg border border-ink/10 bg-white p-3"
       onSubmit={async (event) => {
         event.preventDefault();
-        const form = new FormData(event.currentTarget);
+        const formElement = event.currentTarget;
+        const form = new FormData(formElement);
         const monto = fixedAmount ?? Number(form.get("monto"));
         const file = form.get("comprobante");
         if (!Number.isFinite(monto) || monto <= 0) {
@@ -277,7 +278,7 @@ function PaymentForm({
             file instanceof File && file.size > 0 ? file : null,
           );
           onDone();
-          event.currentTarget.reset();
+          formElement.reset();
         } catch (error) {
           onError(error instanceof Error ? error.message : "No se pudo registrar el pago");
         }
