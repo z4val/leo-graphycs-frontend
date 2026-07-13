@@ -1,0 +1,8 @@
+caso,modulo,tipo,estado,evidencia,observaciones
+CP-INV-05,Inventario,Manual,BLOQUEADO/PENDIENTE,,Cron/notificacion/correo
+CP-KAN-03,Kanban,Manual,PENDIENTE,,Dos sesiones WebSocket
+CP-KAN-04,Kanban,Manual,BLOQUEADO,,Adjuntos Kanban no expuestos en API actual
+CP-COT-04,Cotizacion,Manual,BLOQUEADO,,Endpoint PDF no implementado
+CP-IA-01,IA,Manual,BLOQUEADO/PENDIENTE,,Requiere Chatwoot/n8n/LLM desplegado
+CP-IA-03,IA,Manual,BLOQUEADO/PENDIENTE,,Requiere Chatwoot/n8n/LLM desplegado
+CP-BI-02,BI,Manual,BLOQUEADO,,Export Excel/PDF no implementado en BI
